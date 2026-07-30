@@ -8,6 +8,8 @@ How you'd build it, roughly: Connect it to Slack, email, calendar. You tell it "
 
 Starting small: Start with just Slack + Gmail, and you manually type what you're focused on. Later, it figures out your focus automatically from your calendar and activity, essentially becoming your whole inbox.
 
+
+
 2. **Signal Filter** — semantic notification triage
 
 The problem: Notification fatigue isn't a volume problem, it's a relevance problem. "Do Not Disturb" and priority inboxes use rigid rules (sender, keyword) not actual meaning or your current state.
@@ -24,7 +26,9 @@ Push only the few real interrupts to a native notification
 MVP → long-term: MVP = single Slack workspace + Gmail, manual focus-text input. Long-term = auto-detects focus from calendar/activity, becomes a real inbox replacement.
 
 
+
 **GAME PLAN**
+
 Going with Signal Filter — semantic notification triage. It's the most broadly "in-demand" because notification overload hits literally everyone with a job (not a niche audience), there's no dominant winner yet (Superhuman/Sanebox solve inbox ranking but not cross-app, focus-aware triage), and it has an obvious path to a real product/business if you want to take it there later.
 
 What you're building
