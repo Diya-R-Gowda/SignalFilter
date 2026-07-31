@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+sqlalchemy
+psycopg[binary]
+python-dotenv
+slack-bolt
+sentence-transformers
+requests
+win11toast
+pydantic-settings
