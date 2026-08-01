@@ -17,5 +17,5 @@ def get_session():
 
 
 def init_db():
-    from app.models import item, focus_state, feedback  # noqa: F401
+    from app.models import item, focus_state, feedback, sync_state  # noqa: F401
     Base.metadata.create_all(bind=engine)

@@ -8,3 +8,6 @@ sentence-transformers
 requests
 win11toast
 pydantic-settings
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
