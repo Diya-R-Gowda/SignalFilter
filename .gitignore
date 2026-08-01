@@ -3,5 +3,6 @@ backend/.env
 backend/credentials.json
 backend/token.json
 frontend/node_modules/
+frontend/dist/
 __pycache__/
 *.pyc
