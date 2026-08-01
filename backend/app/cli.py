@@ -13,9 +13,7 @@ def cmd_focus(args: argparse.Namespace) -> None:
         session.close()
 
 
-def cmd_run(_args: argparse.Namespace) -> None:
-    from app.connectors.slack_connector import start_slack_listener
-
+def cmd_run(args: argparse.Namespace) -> None:
     session = SessionLocal()
     try:
         focus_text = get_current_focus(session)
@@ -27,9 +25,33 @@ def cmd_run(_args: argparse.Namespace) -> None:
         return
 
     print(f"Current focus: {focus_text!r}")
-    print("Listening on Slack (Socket Mode)... Ctrl+C to stop.")
     print("Tip: run `python -m app.cli focus \"new text\"` in another terminal any time to update your focus live.")
-    start_slack_listener()
+
+    sources = args.source
+    listeners = []
+
+    if sources in ("slack", "all"):
+        from app.connectors.slack_connector import start_slack_listener
+        listeners.append(("Slack (Socket Mode)", start_slack_listener))
+
+    if sources in ("gmail", "all"):
+        from app.connectors.gmail_connector import start_gmail_listener
+        listeners.append(("Gmail (polling)", start_gmail_listener))
+
+    if len(listeners) == 1:
+        name, start_fn = listeners[0]
+        print(f"Listening on {name}... Ctrl+C to stop.")
+        start_fn()
+        return
+
+    import threading
+
+    print(f"Listening on {', '.join(name for name, _ in listeners)}... Ctrl+C to stop.")
+    threads = [threading.Thread(target=start_fn, daemon=True) for _, start_fn in listeners]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
 
 
 def main() -> None:
@@ -42,7 +64,13 @@ def main() -> None:
     focus_parser.add_argument("text", help="What you're currently focused on")
     focus_parser.set_defaults(func=cmd_focus)
 
-    run_parser = subparsers.add_parser("run", help="Start the Slack listener + triage pipeline")
+    run_parser = subparsers.add_parser("run", help="Start the connector(s) + triage pipeline")
+    run_parser.add_argument(
+        "--source",
+        choices=["slack", "gmail", "all"],
+        default="all",
+        help="Which connector(s) to run (default: all)",
+    )
     run_parser.set_defaults(func=cmd_run)
 
     args = parser.parse_args()

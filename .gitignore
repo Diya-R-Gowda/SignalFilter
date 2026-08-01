@@ -1,5 +1,7 @@
 backend/venv/
 backend/.env
+backend/credentials.json
+backend/token.json
 frontend/node_modules/
 __pycache__/
 *.pyc
