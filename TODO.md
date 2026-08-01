@@ -21,6 +21,26 @@ everything else is being built without waiting on these.
 
 **Which inbox to use for testing?** Your call — `diyaprosubs@gmail.com` works fine for a personal test, or use a throwaway Gmail account if you'd rather not connect your main inbox yet. Either way, add it as a test user in step 3.
 
+## 2. Try the dashboard in a browser
+
+I type-checked and built the frontend and smoke-tested the API endpoints directly, but I can't open a browser — you're the first person to actually look at the dashboard rendered. Steps are in the root `README.md` under "Running it → API + dashboard". Quick version:
+
+```
+# terminal 2, from backend/
+./venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+
+# terminal 3
+cd frontend
+npm install
+npm run dev
+```
+
+Then open `http://localhost:5173`. Let me know if anything looks broken or the layout needs work — it's intentionally minimal styling for now.
+
+## 3. Test the Gmail connector live (after #1 above)
+
+Once `backend/credentials.json` exists: `./venv/Scripts/python.exe -m app.cli run --source gmail` (or `--source all` to run Slack + Gmail together), approve the OAuth prompt in the browser that opens, then send yourself a test email and check it shows up in the CLI output / dashboard.
+
 ---
 
 *(This file is scratch/working-notes, not part of the permanent docs — safe to delete once everything below is done.)*
