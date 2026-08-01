@@ -4,9 +4,13 @@ from sqlalchemy.orm import Session
 from app.models.focus_state import FocusState
 
 
-def get_current_focus(session: Session) -> str | None:
+def get_current_focus_state(session: Session) -> FocusState | None:
     stmt = select(FocusState).order_by(FocusState.created_at.desc()).limit(1)
-    row = session.execute(stmt).scalar_one_or_none()
+    return session.execute(stmt).scalar_one_or_none()
+
+
+def get_current_focus(session: Session) -> str | None:
+    row = get_current_focus_state(session)
     return row.focus_text if row else None
 
 
