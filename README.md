@@ -1,17 +1,41 @@
 # Signal Filter
 
-Notification fatigue isn't a volume problem, it's a relevance problem. Signal Filter watches your Slack (and eventually Gmail) messages, compares each one against a short "what I'm focused on right now" text you set, and only fires a native notification for the messages that actually matter to that focus — everything else is logged but stays quiet.
+## What this project is
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full architecture and project plan. This README is the "how do I get it running" guide.
+Notification fatigue isn't a volume problem, it's a relevance problem. "Do Not Disturb" and priority inboxes filter by rigid rules — sender, keyword — not by what's actually meaningful to you *right now*. Signal Filter fixes that at the source: you tell it what you're currently focused on, in plain language, and it watches your incoming messages (Slack first, Gmail later), scores each one against that focus, and only interrupts you with a native notification for the ones that genuinely matter. Everything else is logged quietly instead of pinging you or getting lost.
 
-## How it works, briefly
+**Why this is a hard problem, not just a keyword filter:** priorities shift hour to hour, and "urgent" only means something relative to what you're doing *right now* — a message that's critical during a product launch is noise the rest of the week. Sender/keyword rules can't capture that; it requires actual semantic understanding of both the incoming message and your current context, fast enough to run in real time across every message.
 
-Every incoming Slack message goes through two stages before a notification decision is made:
+**Who this is for:** originally a personal tool (single user, single Slack workspace + Gmail), scoped so it could grow into a real inbox-replacement product later — see "Long-term" in the status table below and the full plan in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
-1. **Embedding filter** — a local `sentence-transformers` model (`all-MiniLM-L6-v2`) embeds the message and your focus text, and computes similarity. Cheap and fast; runs on every message. Anything below the threshold is filtered out immediately.
-2. **LLM judgment** — messages that clear stage 1 go to a local LLM (`qwen2.5:3b-instruct`, run through Ollama — no API keys, no cost) which scores relevance + urgency 0–10. Scores above the cutoff trigger a native Windows toast notification.
+## How it works
 
-Everything is logged to Postgres either way, so nothing is silently dropped — you can go look at what got filtered.
+Every incoming message runs through a two-stage pipeline before a notification decision is made:
+
+1. **Embedding filter (stage 1)** — a local `sentence-transformers` model (`all-MiniLM-L6-v2`) embeds the message and your focus text, and computes cosine similarity between them. Cheap, fast, runs on *every* message. Anything below the similarity threshold is filtered out immediately, without ever reaching the LLM.
+2. **LLM judgment (stage 2)** — messages that clear stage 1 go to a local LLM (`qwen2.5:3b-instruct`, run through Ollama — no API keys, no per-message cost) which reasons about semantic relevance, urgency, and context, and returns a 0–10 interrupt score plus a one-line reason. Scores above the cutoff fire a native Windows toast notification; the rest stay silent.
+
+Every message is logged to Postgres regardless of outcome (`filtered` / `scored` / `NOTIFIED`), so nothing is silently dropped — you can always go look at what got filtered and why.
+
+## Current status
+
+| Area | Status | Notes |
+|---|---|---|
+| Problem definition, architecture, tech choices | 🟢 Done | See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the full plan and reasoning behind each choice |
+| Postgres schema (`items`, `focus_states`, `feedback`) | 🟢 Done | SQLAlchemy models in `backend/app/models/` |
+| Embedding filter (stage 1) | 🟢 Done | Local `all-MiniLM-L6-v2`, tested against real relevant/irrelevant messages |
+| LLM judgment (stage 2) | 🟢 Done | Local `qwen2.5:3b-instruct` via Ollama, tested end-to-end |
+| Native Windows notifications | 🟢 Done | `win11toast`, tested |
+| Slack connector (Socket Mode) | 🟢 Done | Live — connected to a real Slack workspace |
+| CLI (`focus` / `run`) | 🟢 Done | Focus text can be updated live without restarting the listener |
+| Setup docs | 🟢 Done | This file + `backend/README.md` |
+| Manual usage / real-world feedback | 🟡 In progress | Running live against real Slack traffic now |
+| Gmail connector | ⚪ Not started | Week 2 |
+| React dashboard + 👍/👎 feedback UI | ⚪ Not started | Week 2 |
+| Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
+| Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
+
+This README covers "how do I get it running." For the full architecture, decision rationale, and week-by-week plan, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## Prerequisites
 

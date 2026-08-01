@@ -1,5 +1,27 @@
 # Signal Filter — Project Plan
 
+## Status (as of 2026-08-01)
+
+| Task | Status | Detail |
+|---|---|---|
+| Define problem, architecture, tech stack | 🟢 Done | Postgres (practice goal), local MiniLM embeddings, local `qwen2.5:3b-instruct` via Ollama (hybrid two-stage pipeline), monorepo, CLI-first, everything free — no paid APIs |
+| Install Postgres, create `signalfilter` DB | 🟢 Done | Password-reset via `pg_hba.conf` trust workaround, then `CREATE DATABASE` |
+| Install Ollama, pull `qwen2.5:3b-instruct` | 🟢 Done | ~1.9GB model, runs CPU-only (16GB RAM, Intel Iris Xe iGPU, no discrete GPU) |
+| Scaffold FastAPI backend + Python deps | 🟢 Done | `backend/`, venv, `requirements.txt`, all installed cleanly on Python 3.14 |
+| SQLAlchemy models: `Item`, `FocusState`, `Feedback` | 🟢 Done | `backend/app/models/`, tables created via `init_db()` |
+| Embedding filter (stage 1) | 🟢 Done | `backend/app/services/embedding.py` — tested: relevant message scored 0.43, irrelevant scored 0.07 |
+| LLM judgment (stage 2) | 🟢 Done | `backend/app/services/llm.py` — tested: real message scored 8/10 with a sensible reason |
+| Native Windows notifications | 🟢 Done | `backend/app/services/notify.py` (`win11toast`) — tested, toast fired |
+| Pipeline orchestrator | 🟢 Done | `backend/app/pipeline.py` ties stage 1 → stage 2 → notify → log together |
+| Slack connector (Socket Mode) | 🟢 Done | `backend/app/connectors/slack_connector.py` — live, connected to a real Slack app/workspace |
+| CLI (`focus` / `run`) | 🟢 Done | `backend/app/cli.py` — focus text updatable live without restarting the listener |
+| Setup docs (root README + backend README) | 🟢 Done | Full Postgres/Ollama/Slack-app walkthrough for a fresh machine |
+| Running live against real Slack traffic | 🟡 In progress | Listener is running; validating real messages get filtered/scored/notified correctly |
+| Gmail connector | ⚪ Not started | Week 2 |
+| React dashboard + 👍/👎 feedback UI | ⚪ Not started | Week 2 |
+| Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
+| Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
+
 ## The idea
 
 You're not overwhelmed because you get too many notifications — you're overwhelmed because most of them don't matter right now. Signal Filter learns what you're currently focused on (a short text you set, updated throughout the day) and only interrupts you for things actually relevant to that, muting the rest instead of silently dropping it.
