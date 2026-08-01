@@ -29,7 +29,7 @@ Every message is logged to Postgres regardless of outcome (`filtered` / `scored`
 | Slack connector (Socket Mode) | 🟢 Done | Live — connected to a real Slack workspace |
 | CLI (`focus` / `run`) | 🟢 Done | Focus text can be updated live without restarting the listener |
 | Setup docs | 🟢 Done | This file + `backend/README.md` |
-| Manual usage / real-world feedback | 🟡 In progress | Running live against real Slack traffic now |
+| Manual usage / real-world feedback | 🟢 Done | Validated end-to-end on real Slack messages — relevant message scored 8/10 and notified, irrelevant one scored 3/10 and was correctly held back |
 | Gmail connector | ⚪ Not started | Week 2 |
 | React dashboard + 👍/👎 feedback UI | ⚪ Not started | Week 2 |
 | Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |

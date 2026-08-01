@@ -16,7 +16,7 @@
 | Slack connector (Socket Mode) | 🟢 Done | `backend/app/connectors/slack_connector.py` — live, connected to a real Slack app/workspace |
 | CLI (`focus` / `run`) | 🟢 Done | `backend/app/cli.py` — focus text updatable live without restarting the listener |
 | Setup docs (root README + backend README) | 🟢 Done | Full Postgres/Ollama/Slack-app walkthrough for a fresh machine |
-| Running live against real Slack traffic | 🟡 In progress | Listener is running; validating real messages get filtered/scored/notified correctly |
+| Running live against real Slack traffic | 🟢 Done | Validated: relevant message ("can you check if the pipeline is working?") scored 8/10 and notified; irrelevant ("anyone up for lunch?") scored 3/10 and was correctly held back. Also caught and fixed a real bug — stage-1 threshold was too high, filtering out even relevant short messages before they reached the LLM |
 | Gmail connector | ⚪ Not started | Week 2 |
 | React dashboard + 👍/👎 feedback UI | ⚪ Not started | Week 2 |
 | Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
