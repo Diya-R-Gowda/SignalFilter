@@ -3,7 +3,7 @@
 Checklist of actions that need you specifically (credentials, manual testing) —
 everything else is being built without waiting on these.
 
-## 1. Gmail OAuth credentials (needed before the Gmail connector can run)
+## 1. Gmail OAuth credentials (needed before the Gmail connector can run) — done, saved to `backend/credentials.json`
 
 1. Go to https://console.cloud.google.com/ and create a new project (any name, e.g. "signal-filter").
 2. In the project, go to **APIs & Services → Library**, search for "Gmail API", click it, click **Enable**.
