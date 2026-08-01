@@ -17,8 +17,9 @@
 | CLI (`focus` / `run`) | 🟢 Done | `backend/app/cli.py` — focus text updatable live without restarting the listener |
 | Setup docs (root README + backend README) | 🟢 Done | Full Postgres/Ollama/Slack-app walkthrough for a fresh machine |
 | Running live against real Slack traffic | 🟢 Done | Validated: relevant message ("can you check if the pipeline is working?") scored 8/10 and notified; irrelevant ("anyone up for lunch?") scored 3/10 and was correctly held back. Also caught and fixed a real bug — stage-1 threshold was too high, filtering out even relevant short messages before they reached the LLM |
-| Gmail connector | ⚪ Not started | Week 2 |
-| React dashboard + 👍/👎 feedback UI | ⚪ Not started | Week 2 |
+| FastAPI HTTP API (`/items`, `/focus`, `/items/{id}/feedback`) | 🟢 Done | `backend/app/main.py` + `backend/app/schemas.py` — smoke-tested against the real DB via `TestClient` |
+| Gmail connector | 🟡 Built, not yet OAuth-tested live | `backend/app/connectors/gmail_connector.py` — `history.list` polling, reuses `process_item()`; needs `backend/credentials.json` from you (see `TODO.md`) before it can run |
+| React dashboard + 👍/👎 feedback UI | 🟡 Built, not yet run in a browser | `frontend/` — Vite + React + TS, surfaced/filtered columns, focus switcher, feedback buttons; type-checks and builds cleanly, not yet manually verified in a browser |
 | Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
 | Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
 

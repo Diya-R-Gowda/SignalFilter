@@ -30,8 +30,9 @@ Every message is logged to Postgres regardless of outcome (`filtered` / `scored`
 | CLI (`focus` / `run`) | 🟢 Done | Focus text can be updated live without restarting the listener |
 | Setup docs | 🟢 Done | This file + `backend/README.md` |
 | Manual usage / real-world feedback | 🟢 Done | Validated end-to-end on real Slack messages — relevant message scored 8/10 and notified, irrelevant one scored 3/10 and was correctly held back |
-| Gmail connector | ⚪ Not started | Week 2 |
-| React dashboard + 👍/👎 feedback UI | ⚪ Not started | Week 2 |
+| FastAPI HTTP API | 🟢 Done | `GET/POST /focus`, `GET /items`, `POST /items/{id}/feedback` — smoke-tested against the real DB |
+| Gmail connector | 🟡 Built, not yet live-tested | Polls Gmail's `history.list`; needs your own OAuth credentials first — see `TODO.md` |
+| React dashboard + 👍/👎 feedback UI | 🟡 Built, not yet run in a browser | `frontend/` — Vite + React + TS, type-checks and builds cleanly |
 | Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
 | Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
 
@@ -47,6 +48,8 @@ You'll need these installed before setup. All of them are free.
 | **PostgreSQL** | Stores every triaged message + your feedback | [postgresql.org/download](https://www.postgresql.org/download/) |
 | **Ollama** | Runs the LLM stage locally, free | [ollama.com/download](https://ollama.com/download) |
 | **A Slack account** with permission to install apps to a workspace | The connector reads Slack messages | Use your own workspace, or make a free one at [slack.com/create](https://slack.com/create) if you don't want to install into a work workspace |
+| **Node.js 18+** | Runs the React dashboard | [nodejs.org](https://nodejs.org/) |
+| **A Google account + Google Cloud project** (free tier) | The Gmail connector needs OAuth credentials | See `TODO.md` for the step-by-step |
 
 ## Setup
 
@@ -121,6 +124,10 @@ Open `.env` and fill in:
 
 Tables are created automatically the first time you run the CLI (see below) — no separate migration step needed.
 
+### 8. (Optional) Gmail OAuth credentials
+
+Only needed if you want the Gmail connector running alongside Slack. See `TODO.md` for the full Google Cloud Console walkthrough — it ends with a `backend/credentials.json` file. The first time you run `app.cli run` with Gmail included, a browser window opens once to ask you to approve access, then caches a token so it won't ask again.
+
 ## Running it
 
 From `backend/`, with everything above configured:
@@ -130,7 +137,7 @@ From `backend/`, with everything above configured:
 ./venv/Scripts/python.exe -m app.cli run
 ```
 
-`run` starts the Slack listener and prints a line for every message it processes (`filtered`, `scored`, or `NOTIFIED`). Messages that clear both stages trigger a real Windows notification.
+`run` starts the connector(s) and prints a line for every message it processes (`filtered`, `scored`, or `NOTIFIED`). Messages that clear both stages trigger a real Windows notification. By default `run` starts both Slack and Gmail; use `--source slack` or `--source gmail` to run just one (useful if you haven't set up Gmail credentials yet).
 
 Update your focus at any time from a second terminal — no restart needed, `run` re-reads the latest focus from the database on every message:
 
@@ -138,14 +145,32 @@ Update your focus at any time from a second terminal — no restart needed, `run
 ./venv/Scripts/python.exe -m app.cli focus "new focus text"
 ```
 
+### API + dashboard (optional, for browsing items visually instead of querying Postgres)
+
+In a second terminal, from `backend/`:
+
+```
+./venv/Scripts/python.exe -m uvicorn app.main:app --reload --port 8000
+```
+
+In a third terminal:
+
+```
+cd frontend
+npm install
+npm run dev
+```
+
+Open the URL Vite prints (typically `http://localhost:5173`) — you'll see items split into **Surfaced** (notified) and **Filtered**, a focus switcher, and 👍/👎 buttons that write to the `feedback` table.
+
 ## Config reference
 
 All tunables live in `backend/.env`:
 
 | Variable | Default | What it does |
 |---|---|---|
-| `EMBEDDING_THRESHOLD` | `0.25` | Stage-1 cosine similarity cutoff (0–1). Lower = more messages reach the LLM stage. |
-| `INTERRUPT_SCORE_THRESHOLD` | `6` | Stage-2 LLM score (0–10) needed to actually fire a notification. |
+| `EMBEDDING_THRESHOLD` | `0.0` | Stage-1 cosine similarity cutoff (0–1). Lower = more messages reach the LLM stage. Set to `0.0` after live testing showed the LLM stage is cheap enough to let almost everything through and do the real discrimination itself. |
+| `INTERRUPT_SCORE_THRESHOLD` | `4` | Stage-2 LLM score (0–10) needed to actually fire a notification. Lowered from `6` after live testing showed casual-but-relevant messages (e.g. "how's X coming along?") should still notify. |
 | `OLLAMA_MODEL` | `qwen2.5:3b-instruct` | Must already be pulled via `ollama pull`. |
 | `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Downloaded automatically from Hugging Face on first run. |
 
@@ -155,17 +180,27 @@ All tunables live in `backend/.env`:
 - **First embedding call is slow** — `all-MiniLM-L6-v2` downloads (~90MB) from Hugging Face the first time it's used, then is cached locally. Subsequent runs are fast.
 - **Windows symlink warning from `huggingface_hub`** — harmless; caching still works, just uses more disk space. Ignore it, or enable Windows Developer Mode to silence it.
 - **No notification fires** — check the CLI output: if a message is stuck at `filtered`, it didn't clear the stage-1 similarity threshold; if `scored` but not `NOTIFIED`, it cleared stage 1 but the LLM score was below `INTERRUPT_SCORE_THRESHOLD`. Both are visible per-message in the `items` table in Postgres.
+- **Dashboard shows "Can't reach the API"** — `uvicorn app.main:app` isn't running, or isn't on port 8000. Start it in its own terminal (see "Running it" above).
+- **Gmail connector raises `FileNotFoundError: ... credentials.json`** — you haven't done the Google Cloud OAuth setup yet. See `TODO.md`.
 
 ## Project structure
 
 ```
 backend/
   app/
-    connectors/     # Slack (Socket Mode), Gmail (Week 2)
-    models/         # SQLAlchemy models: Item, FocusState, Feedback
-    services/       # embedding, llm, notify, focus
+    connectors/     # Slack (Socket Mode), Gmail (history.list polling)
+    models/         # SQLAlchemy models: Item, FocusState, Feedback, SyncState
+    services/       # embedding, llm, notify, focus, sync_state
     pipeline.py     # ties the two-stage pipeline together
-    cli.py          # `focus` / `run` commands
+    cli.py          # `focus` / `run [--source slack|gmail|all]` commands
+    main.py         # FastAPI app: /items, /focus, /items/{id}/feedback
+    schemas.py      # Pydantic request/response models for the API
     config.py       # reads backend/.env
+frontend/
+  src/
+    App.tsx         # dashboard: surfaced/filtered columns, focus switcher
+    ItemCard.tsx     # single item row + 👍/👎 feedback buttons
+    api.ts           # fetch wrappers for the backend API
 CONTRIBUTING.md      # full project plan and architecture
+TODO.md              # action items only you can do (e.g. Gmail OAuth setup)
 ```
