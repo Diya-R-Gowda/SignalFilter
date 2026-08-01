@@ -71,7 +71,36 @@ Every incoming message runs through two stages before a notification decision is
 |---|---|---|---|
 | **Week 1** | Backend pipeline, one connector, CLI only — no frontend yet | 1. Scaffold FastAPI project + Postgres connection via SQLAlchemy.<br>2. Define `Item`, `FocusState`, `Feedback` tables.<br>3. Build Slack connector using **Socket Mode** (no public URL/ngrok needed) — pull real messages into the `Item` schema.<br>4. Add manual focus-text input (CLI arg or simple POST endpoint) so you can set/change "what I'm focused on" without a UI.<br>5. Wire up the two-stage pipeline (embedding filter → local LLM via Ollama) end-to-end on real Slack messages.<br>6. Fire native Windows toast notifications (`win11toast`/`winsdk`) for items that clear the interrupt-score cutoff.<br>7. Log every triage decision (both scores + eventual feedback) to Postgres. | Real Slack messages flowing through the full pipeline in real time, triggering actual Windows notifications for the relevant ones — provable end-to-end, even with zero UI. |
 | **Week 2** | Second connector + first UI | 1. Add Gmail connector (polling `history.list` every 30–60s, no Pub/Sub needed).<br>2. Normalize Gmail messages into the same `Item` schema so the pipeline doesn't care which source an item came from.<br>3. Build a simple React/TS dashboard: unified stream view, split into "surfaced" vs "filtered" items.<br>4. Add 👍/👎 buttons on each item, wired to the `Feedback` table already logging since Week 1. | A working local app showing both Slack + Gmail items ranked by relevance, with feedback capture live — usable on your own real inbox for a few days. |
-| **Week 3+** | Iterate on ranking quality, expand context | 1. Use accumulated feedback to tune the stage-1 similarity threshold (or train a lightweight classifier — e.g. logistic regression on embeddings — on top of it).<br>2. Add Google Calendar as a context signal (e.g. "in a meeting" suppresses non-urgent interrupts, meeting titles inform focus).<br>3. Explore auto-detecting focus from calendar events/activity instead of always requiring manual input.<br>4. Longer-term/optional: browser extension injecting relevance scores directly into Gmail/Slack UI, multi-user support. | Ranking that visibly improves from real feedback, plus calendar-aware context — the "long-term" version of the MVP from the original pitch. |
+| **Week 3+** | Iterate on ranking quality, expand context | 1. Use accumulated feedback to tune the stage-1 similarity threshold (or train a lightweight classifier — e.g. logistic regression on embeddings — on top of it).<br>2. Add Google Calendar as a context signal (e.g. "in a meeting" suppresses non-urgent interrupts, meeting titles inform focus).<br>3. Explore auto-detecting focus from calendar events/activity instead of always requiring manual input.<br>4. **GitHub-aware auto-reply with actionable notifications** — see detailed idea below.<br>5. Longer-term/optional: browser extension injecting relevance scores directly into Gmail/Slack UI, multi-user support. | Ranking that visibly improves from real feedback, plus calendar-aware context — the "long-term" version of the MVP from the original pitch. |
+
+## Week 3+ idea: GitHub-aware auto-reply with actionable notifications
+
+**The idea:** connect a GitHub repo to Signal Filter. When a Slack question comes in that's already answered by something already committed (e.g. "did you fix the pipeline bug?" and there's a commit that did exactly that), the system drafts a reply from that commit instead of just notifying you to go answer it yourself. If nothing in the repo answers the question, it falls back to today's normal notify-only behavior.
+
+**How the decision would extend the existing two-stage pipeline (a third branch, not a replacement):**
+
+1. Stage 1 (embedding filter) and stage 2 (LLM relevance/urgency score) run exactly as they do today.
+2. For items that clear the notify threshold, an additional check runs: *does this question already have a confident answer in recent commit history?* This needs its own retrieval step (embed commit messages/diffs/README — a small RAG index over the repo) and a separate LLM call whose job is specifically "does commit X answer question Y, and if so draft a short reply" — a QA task, distinct from the relevance-scoring task stage 2 already does. This step needs a **high confidence bar**: a wrong or hallucinated answer posted into Slack under your name is a much worse failure than no reply at all.
+3. Outcome branches:
+   - No confident answer found in the repo → normal notify, exactly like today.
+   - Confident answer found → still notify, but the notification itself carries the drafted reply, not just the original message.
+
+**Delivery mechanic — actionable Windows notification:**
+
+- The native toast includes the drafted reply text plus two buttons: **Yes** (post it) / **No** (stale or wrong, don't post).
+- `win11toast` supports action buttons via an `on_click` callback, so this is feasible with the notification library already in use — no new dependency needed.
+- Because the click might happen well after the toast fires, the drafted reply and its target channel/thread ID need to be **persisted** (in the `items` row, not just held in memory) so whichever button gets clicked later still has everything it needs to act.
+- **Yes** → the bot posts the drafted reply into the original Slack thread (needs the `chat:write` scope added — the bot is currently read-only).
+- **No** → nothing gets posted; you go reply manually in Slack yourself, same as today.
+
+**Why this doubles as the feedback loop:** clicking Yes/No on a drafted reply is functionally the same signal as the 👍/👎 feedback already planned for the dashboard (was the system's judgment correct?), just captured at the moment of interruption instead of requiring a later visit to a UI. That data can feed the same threshold-tuning work already planned for Week 3+.
+
+**Open questions to resolve before building this:**
+
+- How to index the repo for retrieval — full RAG over commit messages + diffs, or something simpler like just the last N commits' messages?
+- Where to set the confidence threshold for "this counts as an answer" — needs to be conservative, since the cost of a wrong auto-reply is high.
+- Whether this only applies to your own repos, or also team repos you don't solely own (a permissions/trust question, not just a technical one).
+- Needs the Slack bot's scopes expanded to include `chat:write`.
 
 ## Cost notes
 
