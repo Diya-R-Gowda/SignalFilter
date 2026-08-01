@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     ollama_model: str = "qwen2.5:3b-instruct"
 
     embedding_model: str = "all-MiniLM-L6-v2"
-    embedding_threshold: float = 0.25
+    embedding_threshold: float = 0.05
     interrupt_score_threshold: int = 6
 
     class Config:
