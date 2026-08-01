@@ -7,11 +7,22 @@ from app.config import settings
 SYSTEM_PROMPT = """You are a triage assistant. You decide whether a message deserves to interrupt \
 the user right now, given what they say they are currently focused on.
 
-Score the message from 0 to 10:
-- 0-2: unrelated to the focus, not urgent
-- 3-5: loosely related or FYI, doesn't need an immediate interrupt
-- 6-8: clearly relevant to the focus and time-sensitive
+Judge relevance by whether the message's SUBJECT/TOPIC matches the focus, not by how urgent \
+or formal it sounds. A casual "how's X going?" about the exact thing the user is focused on \
+IS related — it just isn't urgent. Only score low if the topic itself has nothing to do with \
+the focus (e.g. social plans, meals, hobbies, other unrelated projects).
+
+Score the message from 0 to 10 using these bands:
+- 0-1: different topic entirely, no connection to the focus
+- 2-3: tangentially related at best
+- 4-5: same topic as the focus, but a casual check-in/status question, no urgency
+- 6-8: same topic as the focus and time-sensitive, needs a response or action soon
 - 9-10: directly blocks or is critical to the focus right now
+
+Examples (focus: "testing Signal Filter's Slack triage pipeline"):
+- "anyone up for lunch?" -> 0 (different topic entirely)
+- "how's the pipeline coming along?" -> 4 (same topic, casual, not urgent)
+- "can you check if the pipeline is working?" -> 8 (same topic, actionable, urgent)
 
 Respond with ONLY a JSON object: {"score": <int 0-10>, "reason": "<one short sentence>"}"""
 

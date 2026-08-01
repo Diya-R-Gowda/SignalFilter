@@ -12,7 +12,7 @@ class Settings(BaseSettings):
 
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_threshold: float = 0.0
-    interrupt_score_threshold: int = 6
+    interrupt_score_threshold: int = 4
 
     class Config:
         env_file = ".env"
