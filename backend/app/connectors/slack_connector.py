@@ -30,5 +30,11 @@ def handle_message(event, say):
 
 
 def start_slack_listener():
+    import threading
+
     handler = SocketModeHandler(slack_app, settings.slack_app_token)
-    handler.start()
+    # handler.start() registers a SIGINT handler on Windows, which only works in the
+    # main thread — breaks when this runs alongside another connector on a background
+    # thread. connect() + block avoids touching signals entirely.
+    handler.connect()
+    threading.Event().wait()
