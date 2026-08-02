@@ -101,6 +101,12 @@ def _poll_once(service, session) -> None:
 
     for message_id in message_ids:
         details = _fetch_message(service, message_id)
+        if not details["content"].strip():
+            # Gmail's history event can fire slightly before subject/snippet are indexed —
+            # nothing to score yet; the message gets picked up correctly on a later poll.
+            print(f"[gmail] {details['sender']}: empty content, skipping (will retry on next poll)")
+            continue
+
         item = process_item(
             session,
             source="gmail",
