@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 from app.db import SessionLocal, init_db
 from app.services.focus import get_current_focus, set_focus
@@ -55,6 +56,11 @@ def cmd_run(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    # Message content (Slack/Gmail) can contain emoji or other non-ASCII characters. Windows'
+    # default console/file encoding (cp1252) can't print those, crashing mid-poll and — for
+    # Gmail — preventing the history cursor from ever advancing past the failing message.
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
     init_db()
 
     parser = argparse.ArgumentParser(prog="signalfilter")

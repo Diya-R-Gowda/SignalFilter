@@ -100,23 +100,28 @@ def _poll_once(service, session) -> None:
     ]
 
     for message_id in message_ids:
-        details = _fetch_message(service, message_id)
-        if not details["content"].strip():
-            # Gmail's history event can fire slightly before subject/snippet are indexed —
-            # nothing to score yet; the message gets picked up correctly on a later poll.
-            print(f"[gmail] {details['sender']}: empty content, skipping (will retry on next poll)")
-            continue
+        try:
+            details = _fetch_message(service, message_id)
+            if not details["content"].strip():
+                # Gmail's history event can fire slightly before subject/snippet are indexed —
+                # nothing to score yet; the message gets picked up correctly on a later poll.
+                print(f"[gmail] {details['sender']}: empty content, skipping (will retry on next poll)")
+                continue
 
-        item = process_item(
-            session,
-            source="gmail",
-            sender=details["sender"],
-            content=details["content"],
-            source_timestamp=details["source_timestamp"],
-            thread_id=details["thread_id"],
-        )
-        status = "NOTIFIED" if item.notified else ("scored" if item.passed_stage1 else "filtered")
-        print(f"[gmail] {details['sender']}: {details['content'][:60]!r} -> {status}")
+            item = process_item(
+                session,
+                source="gmail",
+                sender=details["sender"],
+                content=details["content"],
+                source_timestamp=details["source_timestamp"],
+                thread_id=details["thread_id"],
+            )
+            status = "NOTIFIED" if item.notified else ("scored" if item.passed_stage1 else "filtered")
+            print(f"[gmail] {details['sender']}: {details['content'][:60]!r} -> {status}")
+        except Exception as exc:
+            # One bad message (encoding issue, API hiccup, etc.) must never block the rest of the
+            # batch or prevent the cursor from advancing — that would reprocess everything forever.
+            print(f"[gmail] failed to process message {message_id}: {exc}")
 
     new_history_id = response.get("historyId")
     if new_history_id:
