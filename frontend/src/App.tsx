@@ -37,7 +37,8 @@ function App() {
     setFocusInput("");
   }
 
-  const isLowRelevance = (item: Item) => item.llm_score !== null && item.llm_score <= 1;
+  const isLowRelevance = (item: Item) =>
+    !item.passed_stage1 || (item.llm_score !== null && item.llm_score <= 1);
 
   const surfaced = items.filter((item) => item.notified);
   const filtered = items.filter((item) => !item.notified);
