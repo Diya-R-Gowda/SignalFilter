@@ -31,7 +31,7 @@ Every message is logged to Postgres regardless of outcome (`filtered` / `scored`
 | Setup docs | 🟢 Done | This file + `backend/README.md` |
 | Manual usage / real-world feedback | 🟢 Done | Validated end-to-end on real Slack messages — relevant message scored 8/10 and notified, irrelevant one scored 3/10 and was correctly held back |
 | FastAPI HTTP API | 🟢 Done | `GET/POST /focus`, `GET /items`, `POST /items/{id}/feedback` — smoke-tested against the real DB |
-| Gmail connector | 🟡 Built, not yet live-tested | Polls Gmail's `history.list`; needs your own OAuth credentials first — see `TODO.md` |
+| Gmail connector | 🟢 Done | Polls Gmail's `history.list`, live-tested against a real inbox — correctly scored and filtered a real test email |
 | React dashboard + 👍/👎 feedback UI | 🟡 Built, not yet run in a browser | `frontend/` — Vite + React + TS, type-checks and builds cleanly |
 | Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
 | Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
