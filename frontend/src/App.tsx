@@ -11,6 +11,7 @@ function App() {
   const [focus, setFocusState] = useState<Focus | null>(null);
   const [focusInput, setFocusInput] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [showLowRelevance, setShowLowRelevance] = useState(false);
 
   useEffect(() => {
     async function refresh() {
@@ -36,8 +37,12 @@ function App() {
     setFocusInput("");
   }
 
+  const isLowRelevance = (item: Item) => item.llm_score !== null && item.llm_score <= 1;
+
   const surfaced = items.filter((item) => item.notified);
   const filtered = items.filter((item) => !item.notified);
+  const lowRelevanceCount = filtered.filter(isLowRelevance).length;
+  const visibleFiltered = showLowRelevance ? filtered : filtered.filter((item) => !isLowRelevance(item));
 
   return (
     <div className="app">
@@ -67,9 +72,16 @@ function App() {
         </section>
 
         <section>
-          <h2>Filtered ({filtered.length})</h2>
-          {filtered.length === 0 && <p className="empty">Nothing filtered yet.</p>}
-          {filtered.map((item) => (
+          <h2>Filtered ({visibleFiltered.length})</h2>
+          {lowRelevanceCount > 0 && (
+            <button className="toggle-low-relevance" onClick={() => setShowLowRelevance((v) => !v)}>
+              {showLowRelevance
+                ? `Hide ${lowRelevanceCount} low-relevance (marketing/bulk) items`
+                : `${lowRelevanceCount} low-relevance (marketing/bulk) items hidden — show`}
+            </button>
+          )}
+          {visibleFiltered.length === 0 && <p className="empty">Nothing filtered yet.</p>}
+          {visibleFiltered.map((item) => (
             <ItemCard key={item.id} item={item} />
           ))}
         </section>
