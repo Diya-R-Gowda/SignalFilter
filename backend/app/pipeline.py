@@ -38,7 +38,12 @@ def process_item(
         item.llm_score = score
         item.llm_reason = reason
 
-        if score >= settings.interrupt_score_threshold:
+        threshold = (
+            settings.gmail_interrupt_score_threshold
+            if source == "gmail"
+            else settings.interrupt_score_threshold
+        )
+        if score >= threshold:
             item.notified = True
 
     # Persist the triage decision before touching the notification — win11toast's

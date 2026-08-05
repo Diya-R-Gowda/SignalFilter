@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     embedding_model: str = "all-MiniLM-L6-v2"
     embedding_threshold: float = 0.0
     interrupt_score_threshold: int = 4
+    gmail_interrupt_score_threshold: int = 7
 
     class Config:
         env_file = ".env"
