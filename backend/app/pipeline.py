@@ -1,3 +1,5 @@
+import threading
+
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -38,12 +40,19 @@ def process_item(
 
         if score >= settings.interrupt_score_threshold:
             item.notified = True
-            notify.send_notification(
-                title=f"{source} — {sender}",
-                body=content[:200],
-            )
 
+    # Persist the triage decision before touching the notification — win11toast's
+    # toast() blocks until the toast is dismissed, so if this process gets killed
+    # mid-toast, the record must already be safe rather than lost with it.
     session.add(item)
     session.commit()
     session.refresh(item)
+
+    if item.notified:
+        threading.Thread(
+            target=notify.send_notification,
+            kwargs={"title": f"{source} — {sender}", "body": content[:200]},
+            daemon=True,
+        ).start()
+
     return item
