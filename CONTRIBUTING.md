@@ -22,6 +22,9 @@
 | React dashboard + 👍/👎 feedback UI | 🟡 Built, not yet run in a browser | `frontend/` — Vite + React + TS, surfaced/filtered columns, focus switcher, feedback buttons; type-checks and builds cleanly, not yet manually verified in a browser |
 | Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
 | Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
+| Connector health visibility | ⚪ Not started | Week 3+ — see detailed idea below |
+| In-dashboard tuning controls | ⚪ Not started | Week 3+ — see detailed idea below |
+| Digest mode | ⚪ Not started | Week 3+ — see detailed idea below |
 
 ## The idea
 
@@ -72,7 +75,7 @@ Every incoming message runs through two stages before a notification decision is
 |---|---|---|---|
 | **Week 1** | Backend pipeline, one connector, CLI only — no frontend yet | 1. Scaffold FastAPI project + Postgres connection via SQLAlchemy.<br>2. Define `Item`, `FocusState`, `Feedback` tables.<br>3. Build Slack connector using **Socket Mode** (no public URL/ngrok needed) — pull real messages into the `Item` schema.<br>4. Add manual focus-text input (CLI arg or simple POST endpoint) so you can set/change "what I'm focused on" without a UI.<br>5. Wire up the two-stage pipeline (embedding filter → local LLM via Ollama) end-to-end on real Slack messages.<br>6. Fire native Windows toast notifications (`win11toast`/`winsdk`) for items that clear the interrupt-score cutoff.<br>7. Log every triage decision (both scores + eventual feedback) to Postgres. | Real Slack messages flowing through the full pipeline in real time, triggering actual Windows notifications for the relevant ones — provable end-to-end, even with zero UI. |
 | **Week 2** | Second connector + first UI | 1. Add Gmail connector (polling `history.list` every 30–60s, no Pub/Sub needed).<br>2. Normalize Gmail messages into the same `Item` schema so the pipeline doesn't care which source an item came from.<br>3. Build a simple React/TS dashboard: unified stream view, split into "surfaced" vs "filtered" items.<br>4. Add 👍/👎 buttons on each item, wired to the `Feedback` table already logging since Week 1. | A working local app showing both Slack + Gmail items ranked by relevance, with feedback capture live — usable on your own real inbox for a few days. |
-| **Week 3+** | Iterate on ranking quality, expand context | 1. Use accumulated feedback to tune the stage-1 similarity threshold (or train a lightweight classifier — e.g. logistic regression on embeddings — on top of it).<br>2. Add Google Calendar as a context signal (e.g. "in a meeting" suppresses non-urgent interrupts, meeting titles inform focus).<br>3. Explore auto-detecting focus from calendar events/activity instead of always requiring manual input.<br>4. **GitHub-aware auto-reply with actionable notifications** — see detailed idea below.<br>5. Longer-term/optional: browser extension injecting relevance scores directly into Gmail/Slack UI, multi-user support. | Ranking that visibly improves from real feedback, plus calendar-aware context — the "long-term" version of the MVP from the original pitch. |
+| **Week 3+** | Iterate on ranking quality, expand context, and harden reliability | 1. Use accumulated feedback to tune the stage-1 similarity threshold (or train a lightweight classifier — e.g. logistic regression on embeddings — on top of it).<br>2. Add Google Calendar as a context signal (e.g. "in a meeting" suppresses non-urgent interrupts, meeting titles inform focus).<br>3. Explore auto-detecting focus from calendar events/activity instead of always requiring manual input.<br>4. **GitHub-aware auto-reply with actionable notifications** — see detailed idea below.<br>5. **Connector health visibility** — see detailed idea below.<br>6. **In-dashboard tuning controls** — see detailed idea below.<br>7. **Digest mode** — see detailed idea below.<br>8. Longer-term/optional: browser extension injecting relevance scores directly into Gmail/Slack UI, multi-user support. | Ranking that visibly improves from real feedback, plus calendar-aware context and operational reliability — the "long-term" version of the MVP from the original pitch. |
 
 ## Week 3+ idea: GitHub-aware auto-reply with actionable notifications
 
@@ -102,6 +105,56 @@ Every incoming message runs through two stages before a notification decision is
 - Where to set the confidence threshold for "this counts as an answer" — needs to be conservative, since the cost of a wrong auto-reply is high.
 - Whether this only applies to your own repos, or also team repos you don't solely own (a permissions/trust question, not just a technical one).
 - Needs the Slack bot's scopes expanded to include `chat:write`.
+
+## Week 3+ idea: Connector health visibility
+
+**The idea:** make it obvious, at a glance, whether each connector (Slack, Gmail) is actually making progress — not just "the process is running," but "it successfully checked for new messages recently." This is a direct response to a real bug found during Week 2 live testing: the Gmail poller got stuck reprocessing the same message on every cycle for over eight minutes, and nothing in the running output made that obvious — it took manually comparing database timestamps and process state to diagnose. A silent failure like that could easily go unnoticed for hours in normal use, quietly missing every real email in the meantime.
+
+**How it would work:**
+
+- Each connector records a heartbeat on every cycle — success *or* handled failure, not just "found new mail." For Gmail this means updating a `last_poll_at` timestamp every 30–60s regardless of whether anything new showed up; for Slack (event-driven, not polling) it'd be more like "last event received" or a periodic synthetic self-check.
+- Store heartbeats the same way the Gmail history cursor already is — reusing the `SyncState` key/value table (e.g. `gmail_last_poll_at`, `slack_last_event_at`), or a small dedicated `connector_health` table if more fields end up needed (last error message, consecutive failure count).
+- New API endpoint, `GET /health`, returning each connector's last heartbeat and whether it's stale relative to its expected cadence.
+- Dashboard: a small status strip — a colored dot and "last checked Ns ago" per connector — so a stuck or dead connector is visible the moment you glance at the page, not discovered by noticing a message never arrived.
+- Optional escalation: if a heartbeat goes stale past some threshold, fire a local notification via the same `win11toast` plumbing already built ("Gmail connector hasn't polled in 5 minutes") — Signal Filter watching itself.
+
+**Open questions to resolve before building this:**
+
+- What counts as "stale" per connector — Gmail has a natural cadence (poll interval) to compare against; Slack's Socket Mode connection doesn't poll, so staleness needs a different definition (e.g. a periodic reconnect/ping check instead).
+- Should staleness trigger an actual interrupt notification, or stay purely a dashboard indicator? An alert that itself becomes noisy (e.g. firing just because there's been no new mail, not because anything's actually broken) would undermine the whole point of the project.
+
+## Week 3+ idea: In-dashboard tuning controls
+
+**The idea:** stop requiring a code edit + process restart every time a threshold needs adjusting. Every tuning conversation during Week 2 (embedding threshold, per-source notify threshold) ended the same way: edit `.env` or `config.py`, kill the running listener, restart it, wait for models to reload — a slow loop that also meant losing whatever the connector was mid-processing. Exposing the tunable values through the API and dashboard turns that into something adjustable live, no restart required.
+
+**How it would work:**
+
+- Move the tunable values (`EMBEDDING_THRESHOLD`, `INTERRUPT_SCORE_THRESHOLD`, `GMAIL_INTERRUPT_SCORE_THRESHOLD`) out of being read once at process startup via `pydantic-settings`, and into a DB-backed store read live per item — the same pattern `FocusState` already uses (append-only or single-row table, read fresh on every `process_item()` call instead of cached at import time).
+- New API endpoints: `GET /settings` and `POST /settings` (or per-key `PATCH`), reusing the existing `SyncState`-style key/value table or a small dedicated `Settings` table.
+- Dashboard: a small settings panel — number inputs or sliders for each threshold — that applies immediately to the next message processed.
+- `.env` stays as the bootstrapping default on first run; once a value is set via the dashboard, the DB value wins, mirroring how focus text already works (the `.env` file has no bearing on focus after the first `focus` command).
+
+**Open questions to resolve before building this:**
+
+- Should the API validate/clamp values (e.g. score thresholds must be 0–10, embedding threshold 0–1) rather than trusting arbitrary input?
+- Does the DB value fully replace `.env` for these settings going forward, or should `.env` remain a documented fallback if the DB has no override yet?
+
+## Week 3+ idea: Digest mode
+
+**The idea:** right now every item is either interrupt-worthy (notifies immediately) or filtered (sits quietly, only visible if you happen to open the dashboard). That binary throws away a real middle ground — a message that's genuinely relevant but not urgent *right now* might still be worth knowing about by the end of the day, without deserving a real-time interrupt. A digest surfaces that middle band on its own schedule instead of losing it in the Filtered list forever.
+
+**How it would work:**
+
+- Define a "digest-worthy" score band distinct from the notify threshold — e.g. items that passed stage 1 with a genuinely on-topic reason but scored just below the per-source interrupt cutoff, rather than the clearly-irrelevant bulk mail already being hidden by the dashboard's low-relevance filter.
+- A scheduled check (a background timer thread in the existing listener process, or a separate CLI command run via Windows Task Scheduler) periodically queries items in that band created since the last digest.
+- Delivery: either a single low-priority summary notification ("3 things worth a look from today") or — probably better, since a digest that itself interrupts partly defeats the point — a dedicated "Digest" section on the dashboard that surfaces them without ever firing a toast.
+- Needs a `digested` flag or `digested_at` timestamp on `Item` so the same item isn't pulled into every subsequent digest.
+
+**Open questions to resolve before building this:**
+
+- What cadence makes sense — hourly, a few fixed times a day, once at end of day?
+- Exactly where the score band boundary sits, and whether it should be per-source like the notify threshold already is.
+- Delivery mechanic — dashboard-only vs. a genuinely low-priority notification — needs to stay consistent with the project's core premise of not interrupting unless something truly earns it.
 
 ## Cost notes
 
