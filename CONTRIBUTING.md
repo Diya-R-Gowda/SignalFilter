@@ -258,6 +258,28 @@ Every incoming message runs through two stages before a notification decision is
 - Should this be visible/explainable in the dashboard (e.g. "score adjusted down: this sender's messages are usually not relevant") so it doesn't feel like an opaque black box?
 - Risk of the prior becoming self-fulfilling — if a sender's messages start getting suppressed, you get less chance to give feedback on them, potentially entrenching an early wrong impression.
 
+## Alternate form: Browser extension
+
+**The idea:** instead of (or alongside) the React dashboard, ship Signal Filter's frontend as a browser extension. This isn't a rewrite — the Python backend (Slack/Gmail connectors, Ollama, Postgres, the FastAPI API) keeps running locally exactly as it does today; an extension is just a different client hitting the same `localhost:8000` API the dashboard already talks to. Two distinct versions worth building, in order of ambition:
+
+1. **Popup/side-panel dashboard** — the simplest version: the extension's popup (or a persistent side panel, which Chrome/Edge support via the Side Panel API) fetches `/items` and `/focus` the same way `App.tsx` does now, showing Surfaced/Filtered right from the browser toolbar instead of a separate tab. Close to a direct port of the existing dashboard into an extension shell.
+2. **Inline injection into Gmail/Slack's own web UI** — the more differentiated version, already noted as a long-term idea before this was written up in detail: a content script that reads the current Gmail/Slack web page and injects a relevance badge or highlight directly next to each message in the inbox/channel list, using scores already computed by the existing pipeline (matched up via `thread_id`/sender/content, or a new endpoint like `GET /items/by-thread/{thread_id}`). This means never needing to open a separate dashboard at all — the triage decision shows up right where the message already is.
+
+**What doesn't change:** the extension is purely a frontend. It cannot host the Slack Socket Mode connection, the Gmail poller, Ollama, or Postgres — those need a long-running local process regardless, especially since Manifest V3 (the current Chrome extension platform) intentionally limits how long extension background scripts can run, ruling out hosting the actual pipeline inside the extension itself. The backend stays exactly as architected; this only adds a new way to see its output.
+
+**How it would work, technically:**
+
+- Manifest V3 extension, `host_permissions` scoped to `http://localhost:8000/*` so it's allowed to call the local API from a content script or popup (Chrome blocks arbitrary localhost fetches from web pages by default, but an extension with explicit permission is exempt).
+- Reuse `frontend/src/api.ts`'s fetch wrappers largely as-is — the API surface doesn't need to change for the popup version.
+- For inline injection: a content script matching `mail.google.com` / `app.slack.com`, using `MutationObserver` to catch Gmail's/Slack's dynamically-rendered message lists (both are heavy SPAs, so this can't rely on a static DOM), matching each visible message to its `Item` row and rendering a small badge (color-coded by score, tooltip with the LLM's reason) without altering the site's own functionality.
+
+**Open questions to resolve before building this:**
+
+- Gmail and Slack's web UIs are both unstable/obfuscated DOM targets that change over time — a content script matching their internals is inherently more fragile than the connectors talking to their official APIs, and would need ongoing maintenance as their frontends change.
+- Does the popup version replace the standalone dashboard, or do both coexist (dashboard for a fuller view, extension for at-a-glance/inline)?
+- CORS is already handled for `localhost` broadly (see the dashboard's CORS fix) — an extension's origin (`chrome-extension://...`) would need to be added to the allowed origins too.
+- Packaging/distribution: purely a local unlisted extension (load unpacked, or a private Chrome Web Store listing), since this is a personal tool reading personal data — not intended for public distribution as-is.
+
 ## Cost notes
 
 Everything above runs at $0: Postgres/FastAPI/React/CLI are local and open-source, MiniLM + Qwen2.5:3b run locally via Ollama (no API billing), Slack/Gmail APIs are free-tier for personal-volume use, and Socket Mode avoids needing any public hosting or ngrok.
@@ -266,5 +288,5 @@ Everything above runs at $0: Postgres/FastAPI/React/CLI are local and open-sourc
 
 - How the similarity threshold gets tuned over time (manual vs. learned from feedback)
 - Whether `qwen2.5:3b-instruct` CPU inference speed holds up in practice once tested against real message volume — fallback would be a smaller/faster model or a tighter prompt
-- Browser extension (inject relevance score directly into Gmail/Slack UI) — long-term idea, not in current scope
+- Browser extension as an alternate frontend — see detailed idea above ("Alternate form: Browser extension")
 - Long-term: calendar-aware auto-focus detection, multi-user/team version
