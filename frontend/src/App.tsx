@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-import { getFocus, getItems, setFocus } from "./api";
+import { getFocus, getHealth, getItems, setFocus } from "./api";
+import ConnectorStatus from "./ConnectorStatus";
 import ItemCard from "./ItemCard";
-import type { Focus, Item } from "./types";
+import type { ConnectorHealth, Focus, Item } from "./types";
 
 const POLL_INTERVAL_MS = 5000;
 
@@ -12,13 +13,15 @@ function App() {
   const [focusInput, setFocusInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [showLowRelevance, setShowLowRelevance] = useState(false);
+  const [health, setHealth] = useState<ConnectorHealth[]>([]);
 
   useEffect(() => {
     async function refresh() {
       try {
-        const [itemsRes, focusRes] = await Promise.all([getItems(), getFocus()]);
+        const [itemsRes, focusRes, healthRes] = await Promise.all([getItems(), getFocus(), getHealth()]);
         setItems(itemsRes);
         setFocusState(focusRes);
+        setHealth(healthRes);
         setError(null);
       } catch {
         setError("Can't reach the API — is `uvicorn app.main:app` running on port 8000?");
@@ -52,6 +55,7 @@ function App() {
         <p className="current-focus">
           Current focus: <strong>{focus?.focus_text ?? "not set"}</strong>
         </p>
+        <ConnectorStatus health={health} />
         <form onSubmit={handleFocusSubmit} className="focus-form">
           <input
             value={focusInput}

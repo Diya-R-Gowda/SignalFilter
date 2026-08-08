@@ -1,4 +1,4 @@
-import type { Focus, Item } from "./types";
+import type { ConnectorHealth, Focus, Item } from "./types";
 
 const API_BASE = "http://localhost:8000";
 
@@ -21,6 +21,12 @@ export async function setFocus(focusText: string): Promise<Focus> {
     body: JSON.stringify({ focus_text: focusText }),
   });
   if (!res.ok) throw new Error(`POST /focus failed: ${res.status}`);
+  return res.json();
+}
+
+export async function getHealth(): Promise<ConnectorHealth[]> {
+  const res = await fetch(`${API_BASE}/health`);
+  if (!res.ok) throw new Error(`GET /health failed: ${res.status}`);
   return res.json();
 }
 

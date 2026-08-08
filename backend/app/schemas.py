@@ -43,3 +43,10 @@ class FeedbackOut(BaseModel):
     item_id: str
     thumbs_up: bool
     created_at: datetime
+
+
+class ConnectorHealthOut(BaseModel):
+    name: str
+    last_heartbeat: datetime | None
+    seconds_since: int | None
+    stale: bool

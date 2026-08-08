@@ -1,9 +1,15 @@
+import time
+from datetime import datetime, timezone
+
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
 
 from app.config import settings
 from app.db import SessionLocal
 from app.pipeline import process_item
+from app.services.sync_state import set_cursor
+
+SLACK_HEARTBEAT_INTERVAL_SECONDS = 30
 
 slack_app = App(token=settings.slack_bot_token)
 
@@ -29,6 +35,16 @@ def handle_message(event, say):
         session.close()
 
 
+def _heartbeat_loop() -> None:
+    while True:
+        session = SessionLocal()
+        try:
+            set_cursor(session, "slack_last_heartbeat_at", datetime.now(timezone.utc).isoformat())
+        finally:
+            session.close()
+        time.sleep(SLACK_HEARTBEAT_INTERVAL_SECONDS)
+
+
 def start_slack_listener():
     import threading
 
@@ -37,4 +53,10 @@ def start_slack_listener():
     # main thread — breaks when this runs alongside another connector on a background
     # thread. connect() + block avoids touching signals entirely.
     handler.connect()
+
+    # Started only after connect() succeeds, so a heartbeat implies an actually-established
+    # connection, not just that this function was entered. Plain threading/time.sleep only —
+    # no signal handling here, so this can't reintroduce the bug in the comment above.
+    threading.Thread(target=_heartbeat_loop, daemon=True).start()
+
     threading.Event().wait()

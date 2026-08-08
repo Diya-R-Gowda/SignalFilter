@@ -17,6 +17,35 @@ header h1 {
   margin-bottom: 12px;
 }
 
+.connector-status {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.connector-status-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.connector-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.connector-dot.healthy {
+  background: #2ecc71;
+}
+
+.connector-dot.stale {
+  background: var(--danger);
+}
+
 .focus-form {
   display: flex;
   gap: 8px;

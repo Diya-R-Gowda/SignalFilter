@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 from google.auth.transport.requests import Request
@@ -70,6 +71,8 @@ def _fetch_message(service, message_id: str) -> dict:
 
 
 def _poll_once(service, session) -> None:
+    set_cursor(session, "gmail_last_poll_at", datetime.now(timezone.utc).isoformat())
+
     cursor = get_cursor(session, HISTORY_CURSOR_KEY)
 
     if cursor is None:

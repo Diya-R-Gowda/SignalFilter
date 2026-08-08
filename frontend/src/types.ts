@@ -18,3 +18,10 @@ export interface Focus {
   focus_text: string;
   created_at: string;
 }
+
+export interface ConnectorHealth {
+  name: string;
+  last_heartbeat: string | null;
+  seconds_since: number | null;
+  stale: boolean;
+}
