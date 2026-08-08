@@ -25,6 +25,12 @@
 | Connector health visibility | ⚪ Not started | Week 3+ — see detailed idea below |
 | In-dashboard tuning controls | ⚪ Not started | Week 3+ — see detailed idea below |
 | Digest mode | ⚪ Not started | Week 3+ — see detailed idea below |
+| Attention budget | ⚪ Not started | Week 3+ — see detailed idea below |
+| Weak-signal escalation across messages | ⚪ Not started | Week 3+ — see detailed idea below |
+| On-device personalization via local fine-tuning | ⚪ Not started | Week 3+, long-term — see detailed idea below |
+| Flow-state-aware dynamic strictness | ⚪ Not started | Week 3+ — see detailed idea below |
+| Self-auditing the AI judge (golden-set regression) | ⚪ Not started | Week 3+ — see detailed idea below |
+| Per-sender adaptive trust | ⚪ Not started | Week 3+ — see detailed idea below |
 
 ## The idea
 
@@ -75,7 +81,7 @@ Every incoming message runs through two stages before a notification decision is
 |---|---|---|---|
 | **Week 1** | Backend pipeline, one connector, CLI only — no frontend yet | 1. Scaffold FastAPI project + Postgres connection via SQLAlchemy.<br>2. Define `Item`, `FocusState`, `Feedback` tables.<br>3. Build Slack connector using **Socket Mode** (no public URL/ngrok needed) — pull real messages into the `Item` schema.<br>4. Add manual focus-text input (CLI arg or simple POST endpoint) so you can set/change "what I'm focused on" without a UI.<br>5. Wire up the two-stage pipeline (embedding filter → local LLM via Ollama) end-to-end on real Slack messages.<br>6. Fire native Windows toast notifications (`win11toast`/`winsdk`) for items that clear the interrupt-score cutoff.<br>7. Log every triage decision (both scores + eventual feedback) to Postgres. | Real Slack messages flowing through the full pipeline in real time, triggering actual Windows notifications for the relevant ones — provable end-to-end, even with zero UI. |
 | **Week 2** | Second connector + first UI | 1. Add Gmail connector (polling `history.list` every 30–60s, no Pub/Sub needed).<br>2. Normalize Gmail messages into the same `Item` schema so the pipeline doesn't care which source an item came from.<br>3. Build a simple React/TS dashboard: unified stream view, split into "surfaced" vs "filtered" items.<br>4. Add 👍/👎 buttons on each item, wired to the `Feedback` table already logging since Week 1. | A working local app showing both Slack + Gmail items ranked by relevance, with feedback capture live — usable on your own real inbox for a few days. |
-| **Week 3+** | Iterate on ranking quality, expand context, and harden reliability | 1. Use accumulated feedback to tune the stage-1 similarity threshold (or train a lightweight classifier — e.g. logistic regression on embeddings — on top of it).<br>2. Add Google Calendar as a context signal (e.g. "in a meeting" suppresses non-urgent interrupts, meeting titles inform focus).<br>3. Explore auto-detecting focus from calendar events/activity instead of always requiring manual input.<br>4. **GitHub-aware auto-reply with actionable notifications** — see detailed idea below.<br>5. **Connector health visibility** — see detailed idea below.<br>6. **In-dashboard tuning controls** — see detailed idea below.<br>7. **Digest mode** — see detailed idea below.<br>8. Longer-term/optional: browser extension injecting relevance scores directly into Gmail/Slack UI, multi-user support. | Ranking that visibly improves from real feedback, plus calendar-aware context and operational reliability — the "long-term" version of the MVP from the original pitch. |
+| **Week 3+** | Iterate on ranking quality, expand context, and harden reliability | 1. Use accumulated feedback to tune the stage-1 similarity threshold (or train a lightweight classifier — e.g. logistic regression on embeddings — on top of it).<br>2. Add Google Calendar as a context signal (e.g. "in a meeting" suppresses non-urgent interrupts, meeting titles inform focus).<br>3. Explore auto-detecting focus from calendar events/activity instead of always requiring manual input.<br>4. **GitHub-aware auto-reply with actionable notifications** — see detailed idea below.<br>5. **Connector health visibility** — see detailed idea below.<br>6. **In-dashboard tuning controls** — see detailed idea below.<br>7. **Digest mode** — see detailed idea below.<br>8. **Attention budget** — see detailed idea below.<br>9. **Weak-signal escalation across messages** — see detailed idea below.<br>10. **On-device personalization via local fine-tuning** — see detailed idea below.<br>11. **Flow-state-aware dynamic strictness** — see detailed idea below.<br>12. **Self-auditing the AI judge** — see detailed idea below.<br>13. **Per-sender adaptive trust** — see detailed idea below.<br>14. Longer-term/optional: browser extension injecting relevance scores directly into Gmail/Slack UI, multi-user support. | Ranking that visibly improves from real feedback, plus calendar-aware context and operational reliability — the "long-term" version of the MVP from the original pitch. |
 
 ## Week 3+ idea: GitHub-aware auto-reply with actionable notifications
 
@@ -155,6 +161,102 @@ Every incoming message runs through two stages before a notification decision is
 - What cadence makes sense — hourly, a few fixed times a day, once at end of day?
 - Exactly where the score band boundary sits, and whether it should be per-source like the notify threshold already is.
 - Delivery mechanic — dashboard-only vs. a genuinely low-priority notification — needs to stay consistent with the project's core premise of not interrupting unless something truly earns it.
+
+## Week 3+ idea: Attention budget
+
+**The idea:** most triage tools (this one included, so far) treat "should this interrupt me" as a pure content question — score the message, compare to a fixed threshold, done. But attention itself is a depletable resource, not an infinite gate to filter through. Give yourself a daily interrupt budget (e.g. 15 notifications) — once it's spent, even a message that would normally clear the threshold gets queued instead of firing immediately. This is closer to how behavioral economics treats scarce attention than how any consumer notification tool actually works.
+
+**How it would work:**
+
+- Add a per-day (or rolling-window) counter of notifications fired, alongside the existing `notified` count already implicit in the `items` table.
+- Once the budget is spent, items that clear the normal score threshold get a new status — e.g. `queued` — instead of immediately notifying; they surface in the dashboard as "would have notified" so nothing is silently lost, just deferred.
+- Budget resets on a schedule (daily, or a rolling 24h window) and is itself a per-source or global setting depending on how the in-dashboard tuning controls idea above shapes up.
+- Optional: let higher-scoring items "bump" a lower-scoring queued item if the budget is full but something more urgent arrives — a priority-queue behavior rather than strict first-come-first-served exhaustion.
+
+**Open questions to resolve before building this:**
+
+- What's a sane default budget, and should it differ by source (Slack vs Gmail naturally have different volumes)?
+- Should queued items get released as a batch once the budget resets, or trickle out on their original schedule the next day?
+- Does an urgent (9–10 score) item ever bypass the budget entirely, or is the budget a hard cap with no exceptions?
+
+## Week 3+ idea: Weak-signal escalation across messages
+
+**The idea:** every message is currently scored in complete isolation — stage 1 and stage 2 both only ever look at one message against the focus text. But real urgency sometimes only becomes visible in aggregate: if three different people ask about the same unmerged PR within an hour, each message individually might land at a 4 or 5 (casual, not urgent) and never notify — yet the fact that it keeps coming up *is* itself a strong signal that something's actually blocking people. Almost no triage tool aggregates across messages like this; everything scores independently.
+
+**How it would work:**
+
+- After stage 2 scores an item, run a lightweight aggregate check: how many other items in some recent window (e.g. last few hours) have a similar embedding to this one (reusing the stage-1 embedding model, comparing against recently stored embeddings rather than just the focus text)?
+- If a cluster of similar-topic messages crosses some count threshold within the window, escalate the *next* one (or retroactively flag the cluster) even though no single message alone cleared the notify bar — effectively a repetition-based override on top of the existing per-message score.
+- This needs the embeddings already computed at stage 1 to be persisted queryably (they already are, via `embedding_score`, but the actual vector itself isn't currently stored — only the scalar similarity to focus — so this would require storing the raw embedding vector per item, e.g. via `pgvector` or a simple in-memory recent-embeddings cache).
+
+**Open questions to resolve before building this:**
+
+- What counts as "similar enough" to cluster — a cosine similarity threshold between two messages' embeddings, distinct from the existing focus-similarity threshold?
+- How many occurrences within what time window justifies escalation — needs tuning to avoid false escalation on naturally repetitive but unimportant chatter (e.g. a recurring automated digest email).
+- Does escalation fire a notification directly, or just visually flag the cluster in the dashboard for you to notice?
+
+## Week 3+ idea: On-device personalization via local fine-tuning
+
+**The idea:** the feedback-driven tuning already planned for Week 3+ adjusts a single threshold number from 👍/👎 data. This goes further — periodically fine-tune (e.g. LoRA-adapt) the local `qwen2.5:3b-instruct` model itself on your accumulated feedback, so the model's actual judgment adapts to your specific taste over time rather than just a static prompt plus a global cutoff. Consumer "personalization" almost always means preference toggles; on-device model adaptation from real usage is rare even in commercial products, and fits the project's zero-cost/fully-local ethos exactly.
+
+**How it would work:**
+
+- Periodically (e.g. weekly, run manually or via a scheduled task) export `(focus_text, content, llm_score, thumbs_up)` rows from the `items`/`feedback` tables as a small training set.
+- Run a LoRA fine-tune pass on `qwen2.5:3b-instruct` using that set — Ollama doesn't do this natively, so this would likely mean a separate local fine-tuning toolchain (e.g. `unsloth` or plain `peft`/`transformers`) producing an adapter, then serving the adapted model through Ollama (via a custom Modelfile layering the LoRA weights) instead of the stock model.
+- Needs a clear rollback path — keep the previous adapter/model available and compare scoring behavior on the golden-set regression (see the self-auditing idea below) before fully switching over, since a bad fine-tune could silently make judgment worse, not better.
+
+**Open questions to resolve before building this:**
+
+- Is there realistically enough feedback volume from single-user usage to make fine-tuning meaningful, or does it need weeks/months of data first?
+- CPU-only fine-tuning (no discrete GPU) may be slow even for a 3B model with LoRA — needs a feasibility check before committing to this over just the simpler threshold-tuning approach.
+- How to validate a new fine-tune didn't regress before trusting it live — ties directly into the self-auditing/golden-set idea below.
+
+## Week 3+ idea: Flow-state-aware dynamic strictness
+
+**The idea:** the calendar integration already planned suppresses interrupts based on explicit calendar state ("in a meeting"). This goes further using purely local, passive signals: read idle time and active-window activity (no cloud, no calendar needed) to infer whether you're in deep, uninterrupted flow versus already context-switching a lot, and dynamically raise or lower the interrupt threshold based on that inferred state — not just a binary busy/free from a calendar, but real behavioral signal about how deep you currently are.
+
+**How it would work:**
+
+- A lightweight local background check (e.g. via `pywin32`/`pygetwindow` for active window + a simple idle-time check via `GetLastInputInfo` on Windows) samples periodically: how long has the active window been the same, how recently was there input activity.
+- Derive a rough "flow score" — long uninterrupted stretch in one app = likely deep focus = raise the interrupt threshold temporarily; frequent window-switching = already fragmented attention = threshold can relax back to normal, since an extra interrupt costs less right now.
+- Feed this as a temporary multiplier/offset on top of whatever the per-source threshold already is (from the in-dashboard tuning controls idea), not a replacement for it.
+
+**Open questions to resolve before building this:**
+
+- How to calibrate "deep flow" vs. just idle/away from keyboard — long inactivity isn't the same as long focus, and the signal needs to distinguish them (e.g. idle time near zero + same window for a long stretch = flow; idle time high = probably not at the desk at all).
+- Privacy/scope consideration: this reads window titles, which could include sensitive info (document names, URLs) — needs to stay purely local and probably shouldn't log the actual titles anywhere, just the derived flow score.
+- Does this apply globally or only during hours you'd otherwise expect to be working?
+
+## Week 3+ idea: Self-auditing the AI judge
+
+**The idea:** every prompt rewrite, threshold change, or model swap so far has been validated by live-testing against real messages in the moment — which works, but is manual and easy to skip under time pressure. Keep a small fixed "golden set" of representative messages with known-expected scores (a handful of clearly-irrelevant, clearly-urgent, and deliberately-borderline examples), and automatically re-run it after any change to the prompt, thresholds, or model. If the scoring distribution shifts unexpectedly from the last known-good baseline, flag it before trusting the change. This kind of regression testing for an AI judge's behavior is standard in serious ML production systems and essentially never present in personal tools — but this project already stumbled into needing exactly this today (a prompt rewrite made without this check could easily have silently broken something that live-testing happened to catch).
+
+**How it would work:**
+
+- A small fixture file (e.g. `backend/tests/golden_set.json`) of `{focus_text, content, sender, source, expected_score_range}` entries, covering the known-tricky cases already discovered live (casual-but-related, marketing/bulk mail, urgent-and-related, empty content, etc.).
+- A CLI command (e.g. `python -m app.cli audit`) that runs every golden-set case through the current `llm.score_item()` and reports any that fall outside their expected range, plus a diff against the previous run's scores if one was saved.
+- Run this manually after any prompt/threshold/model change, before restarting the live listener with it — cheap insurance against exactly the kind of regression that's been caught live so far.
+
+**Open questions to resolve before building this:**
+
+- How many golden-set cases are enough to be meaningful without becoming a maintenance burden to keep updated as the focus text/use case evolves?
+- Should this block a config change (hard gate) or just warn (soft check you can override)?
+
+## Week 3+ idea: Per-sender adaptive trust
+
+**The idea:** right now relevance is judged purely from message content against the focus text — the sender's identity plays no role beyond being included in the LLM prompt as context. But real-world triage isn't purely content-based: some senders are reliably noise regardless of topic (a marketing address, a low-signal group chat) and some are reliably worth attention (your manager, a close collaborator) almost independent of what they're currently saying. Blend a lightweight per-sender trust prior — learned purely from your own feedback history, not hardcoded rules — into the final score.
+
+**How it would work:**
+
+- Maintain a simple running statistic per sender (e.g. mean llm_score and thumbs-up rate over their historical items) — a small aggregate query over the existing `items`/`feedback` tables grouped by `sender`, no new model needed to start.
+- Blend this as a modest adjustment to the LLM's per-message score (e.g. a sender with a strong history of thumbs-down on high scores nudges future scores down slightly; a sender with a strong history of thumbs-up on notifications nudges up) rather than a hard override — content relevance should still dominate.
+- This is a natural extension of the feedback-driven tuning already planned, just applied per-sender instead of globally.
+
+**Open questions to resolve before building this:**
+
+- How much history is needed per sender before the prior is trustworthy (avoid overreacting to one or two data points from a new sender)?
+- Should this be visible/explainable in the dashboard (e.g. "score adjusted down: this sender's messages are usually not relevant") so it doesn't feel like an opaque black box?
+- Risk of the prior becoming self-fulfilling — if a sender's messages start getting suppressed, you get less chance to give feedback on them, potentially entrenching an early wrong impression.
 
 ## Cost notes
 
