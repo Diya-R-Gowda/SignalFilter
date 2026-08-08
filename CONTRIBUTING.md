@@ -20,12 +20,12 @@
 | FastAPI HTTP API (`/items`, `/focus`, `/items/{id}/feedback`) | 🟢 Done | `backend/app/main.py` + `backend/app/schemas.py` — smoke-tested against the real DB via `TestClient` |
 | Gmail connector | 🟢 Done | `backend/app/connectors/gmail_connector.py` — OAuth completed, live-tested: a real test email was picked up, scored (0/10, correctly filtered as unrelated to focus), and logged. Along the way found and fixed two real bugs: a Slack thread crash (`SocketModeHandler.start()` touching signals off the main thread) and a false-notification bug (LLM hallucinating a score for a message polled before Gmail had indexed its content) |
 | React dashboard + 👍/👎 feedback UI | 🟡 Built, not yet run in a browser | `frontend/` — Vite + React + TS, surfaced/filtered columns, focus switcher, feedback buttons; type-checks and builds cleanly, not yet manually verified in a browser |
-| Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
+| Feedback-driven threshold tuning | 🟡 Investigated, blocked on data volume | Live DB check: 316 items, only 3 feedback rows (1👍/2👎) — not enough signal to tune anything yet; deferred, see detailed writeup below |
 | Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
 | Connector health visibility | 🟢 Done | Heartbeats (`gmail_last_poll_at`, `slack_last_heartbeat_at`) via `SyncState`, `GET /health`, dashboard status strip — see detailed writeup below |
 | Graceful connector failure handling | 🟢 Done | Found and fixed live: a dead Slack token was crashing the whole process (and Gmail with it) at import time. Connectors now fail their own thread only, record why, and auto-clear the record on next successful start — see detailed writeup below |
 | In-dashboard tuning controls | 🟢 Done | `GET`/`POST /settings` + `SettingsPanel.tsx` — reuses `SyncState`, live-verified: override takes effect on the next message with no restart, survives a restart with a stale `.env` — see detailed writeup below |
-| Digest mode | ⚪ Not started | Week 3+ — see detailed idea below |
+| Digest mode | 🟡 Audited, not built | Score band, cadence, and schema change resolved — see detailed writeup below |
 | Attention budget | ⚪ Not started | Week 3+ — see detailed idea below |
 | Weak-signal escalation across messages | ⚪ Not started | Week 3+ — see detailed idea below |
 | On-device personalization via local fine-tuning | ⚪ Not started | Week 3+, long-term — see detailed idea below |
@@ -100,6 +100,14 @@ The first genuine end-to-end validation of the whole pipeline, not just unit-lev
 ### React dashboard + 👍/👎 feedback UI
 
 `frontend/` — Vite + React + TS. Surfaced/filtered columns are driven directly by the pipeline's own `notified` flag rather than any separate UI-side relevance logic, a focus switcher that waits for the `POST /focus` response before updating displayed state (not optimistic), and 👍/👎 buttons wired to `POST /items/{id}/feedback`. A "hide low-relevance items" toggle was added after real Gmail marketing mail started dominating the Filtered column. **Bug found and fixed:** the first version of that toggle only checked `llm_score <= 1`, which excluded any item with `llm_score === null` — i.e. everything that failed stage 1 and never reached the LLM at all, which turned out to be most of the marketing mail. Fixed to treat `!passed_stage1 || (llm_score !== null && llm_score <= 1)` as low-relevance; verified directly against real DB data before shipping (272 of 278 filtered items were correctly caught by the fixed check). Status: type-checks and builds cleanly end-to-end, but hasn't yet been manually clicked through in a running browser (🟡) — the one item on this list still awaiting that verification pass.
+
+### Feedback-driven threshold tuning
+
+Investigated, not built. With the tuning-controls panel done, this was the obvious next candidate — the plan doc's own Week 3+ ordering lists it first, and it's the direct payoff of two things already in place: the `Feedback` table logging 👍/👎 since Week 1, and thresholds now being adjustable without a restart. But a live query against the real DB (`Feedback`/`Item` tables via the venv's own SQLAlchemy session, not a guess) found only 3 feedback rows total (1👍/2👎) against 316 items — nowhere near enough labeled data to tune anything statistically; building an auto-tuning mechanism on 3 points would just fit noise. Deferred rather than built. Two smaller-scope alternatives were floated for whenever there's real volume: surface downvoted items directly as a "recent misses" list so tuning stays manual but informed, or wait for organic dashboard usage to accumulate more labels first.
+
+### Digest mode
+
+Audited, not built. The existing idea write-up left three questions open; all three resolved by checking what the pipeline already computes rather than inventing new logic. The "digest-worthy" band needs no new scoring — it's already fully derivable from stored fields: `passed_stage1 AND llm_score is not null AND llm_score > 1 AND notified == False` (the `> 1` cutoff reused verbatim from `App.tsx`'s existing `isLowRelevance` check, so digest-worthy is precisely "what's in Filtered today, minus what's already hidden as low-relevance"). Delivery: one low-priority summary toast per day ("4 things worth a look from today"), deliberately not one notification per item — a stream of digest interrupts would recreate the exact noise problem the project exists to avoid, the same reasoning that already ruled out a staleness-alert for connector health. Cadence: a daily background thread in the existing listener process, same pattern as Slack's synthetic heartbeat thread, no Task Scheduler/cron dependency needed since the process runs continuously. Avoiding re-showing the same items forever needs one real schema change — a nullable `digested_at` timestamp on `Item`, the first new column since Week 1 — so each digest only pulls items created since the last one ran. Scope assessed as smaller than the Gmail connector or tuning controls: one column, one background thread, one query filter, one new dashboard section, no new dependencies or OAuth.
 
 ### Connector health visibility
 
@@ -247,18 +255,13 @@ Every incoming message runs through two stages before a notification decision is
 
 **The idea:** right now every item is either interrupt-worthy (notifies immediately) or filtered (sits quietly, only visible if you happen to open the dashboard). That binary throws away a real middle ground — a message that's genuinely relevant but not urgent *right now* might still be worth knowing about by the end of the day, without deserving a real-time interrupt. A digest surfaces that middle band on its own schedule instead of losing it in the Filtered list forever.
 
-**How it would work:**
+**Status: audited, plan finalized, not yet built.** All three of the idea's original open questions resolved — recorded here so the build step doesn't have to redo the analysis.
 
-- Define a "digest-worthy" score band distinct from the notify threshold — e.g. items that passed stage 1 with a genuinely on-topic reason but scored just below the per-source interrupt cutoff, rather than the clearly-irrelevant bulk mail already being hidden by the dashboard's low-relevance filter.
-- A scheduled check (a background timer thread in the existing listener process, or a separate CLI command run via Windows Task Scheduler) periodically queries items in that band created since the last digest.
-- Delivery: either a single low-priority summary notification ("3 things worth a look from today") or — probably better, since a digest that itself interrupts partly defeats the point — a dedicated "Digest" section on the dashboard that surfaces them without ever firing a toast.
-- Needs a `digested` flag or `digested_at` timestamp on `Item` so the same item isn't pulled into every subsequent digest.
+**Score band — resolved:** no new scoring logic needed. `passed_stage1 AND llm_score is not null AND llm_score > 1 AND notified == False` — the `> 1` cutoff reused verbatim from `App.tsx`'s existing `isLowRelevance` check, so digest-worthy is precisely "what's in Filtered today, minus what's already hidden as low-relevance." Not per-source; the existing low-relevance cutoff isn't per-source either.
 
-**Open questions to resolve before building this:**
+**Cadence and delivery — resolved:** one low-priority summary toast per day ("4 things worth a look from today"), not per-item — a stream of digest interrupts would recreate the exact noise problem this project exists to prevent, the same reasoning that already ruled out a staleness alert for connector health. A daily background thread in the existing listener process, same pattern as Slack's synthetic heartbeat thread — no Task Scheduler/cron dependency needed since the process runs continuously. Clicking the toast does nothing special, it's just a nudge to open the dashboard, which gets its own dedicated "Digest" section showing the same band.
 
-- What cadence makes sense — hourly, a few fixed times a day, once at end of day?
-- Exactly where the score band boundary sits, and whether it should be per-source like the notify threshold already is.
-- Delivery mechanic — dashboard-only vs. a genuinely low-priority notification — needs to stay consistent with the project's core premise of not interrupting unless something truly earns it.
+**Avoiding repeats — resolved:** a nullable `digested_at` timestamp on `Item` (the first new column since Week 1) so a digest only ever pulls items created since the last one ran, and marks them after.
 
 ## Week 3+ idea: Attention budget
 
