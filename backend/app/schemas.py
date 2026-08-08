@@ -50,3 +50,5 @@ class ConnectorHealthOut(BaseModel):
     last_heartbeat: datetime | None
     seconds_since: int | None
     stale: bool
+    last_error_at: datetime | None
+    last_error_message: str | None

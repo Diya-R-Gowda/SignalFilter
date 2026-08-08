@@ -81,17 +81,31 @@ def read_health(session: Session = Depends(get_session)) -> list[ConnectorHealth
         raw = get_cursor(session, key)
         if raw is None:
             # Never written a heartbeat yet — unknown, not "healthy by default".
-            results.append(ConnectorHealthOut(name=name, last_heartbeat=None, seconds_since=None, stale=True))
-            continue
+            last_heartbeat = None
+            seconds_since = None
+            stale = True
+        else:
+            last_heartbeat = datetime.fromisoformat(raw)
+            seconds_since = int((now - last_heartbeat).total_seconds())
+            stale = seconds_since > stale_after_seconds
 
-        last_heartbeat = datetime.fromisoformat(raw)
-        seconds_since = int((now - last_heartbeat).total_seconds())
+        raw_error_at = get_cursor(session, f"{name}_last_error_at")
+        last_error_at = datetime.fromisoformat(raw_error_at) if raw_error_at else None
+        last_error_message = get_cursor(session, f"{name}_last_error_message")
+
+        if last_error_at is not None:
+            # A recorded crash is definitionally not healthy, independent of what the
+            # heartbeat-based staleness window would otherwise say.
+            stale = True
+
         results.append(
             ConnectorHealthOut(
                 name=name,
                 last_heartbeat=last_heartbeat,
                 seconds_since=seconds_since,
-                stale=seconds_since > stale_after_seconds,
+                stale=stale,
+                last_error_at=last_error_at,
+                last_error_message=last_error_message,
             )
         )
     return results

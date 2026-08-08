@@ -24,4 +24,6 @@ export interface ConnectorHealth {
   last_heartbeat: string | null;
   seconds_since: number | null;
   stale: boolean;
+  last_error_at: string | null;
+  last_error_message: string | null;
 }

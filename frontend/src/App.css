@@ -46,6 +46,10 @@ header h1 {
   background: var(--danger);
 }
 
+.connector-dot.crashed {
+  background: #e67e22;
+}
+
 .focus-form {
   display: flex;
   gap: 8px;

@@ -131,8 +131,25 @@ def _poll_once(service, session) -> None:
         set_cursor(session, HISTORY_CURSOR_KEY, str(new_history_id))
 
 
+def _record_error(exc: Exception) -> None:
+    session = SessionLocal()
+    try:
+        set_cursor(session, "gmail_last_error_at", datetime.now(timezone.utc).isoformat())
+        set_cursor(session, "gmail_last_error_message", str(exc)[:200])
+    finally:
+        session.close()
+
+
 def start_gmail_listener() -> None:
-    service = get_gmail_service()
+    try:
+        service = get_gmail_service()
+    except Exception as exc:
+        # No retry — missing/invalid credentials need a human to fix them, not a retry loop.
+        # Record why and return; the process and Slack's thread are unaffected.
+        print(f"[gmail] failed to start: {exc}")
+        _record_error(exc)
+        return
+
     print(f"[gmail] connected, polling every {POLL_INTERVAL_SECONDS}s")
 
     while True:
