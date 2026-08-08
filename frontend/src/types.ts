@@ -27,3 +27,20 @@ export interface ConnectorHealth {
   last_error_at: string | null;
   last_error_message: string | null;
 }
+
+export type SettingSource = "default" | "override";
+
+export interface Settings {
+  embedding_threshold: number;
+  embedding_threshold_source: SettingSource;
+  interrupt_score_threshold: number;
+  interrupt_score_threshold_source: SettingSource;
+  gmail_interrupt_score_threshold: number;
+  gmail_interrupt_score_threshold_source: SettingSource;
+}
+
+export interface SettingsUpdate {
+  embedding_threshold?: number;
+  interrupt_score_threshold?: number;
+  gmail_interrupt_score_threshold?: number;
+}

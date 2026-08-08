@@ -50,6 +50,62 @@ header h1 {
   background: #e67e22;
 }
 
+.settings-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.settings-field label {
+  color: var(--text);
+}
+
+.settings-default-hint {
+  font-style: italic;
+  opacity: 0.7;
+}
+
+.settings-field input {
+  width: 100px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+}
+
+.settings-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin: 0;
+}
+
+.settings-panel button {
+  padding: 8px 14px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.settings-panel button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .focus-form {
   display: flex;
   gap: 8px;

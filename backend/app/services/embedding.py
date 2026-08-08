@@ -1,8 +1,10 @@
 from functools import lru_cache
 
 from sentence_transformers import SentenceTransformer, util
+from sqlalchemy.orm import Session
 
 from app.config import settings
+from app.services.sync_state import get_cursor
 
 
 @lru_cache(maxsize=1)
@@ -17,6 +19,8 @@ def similarity(focus_text: str, item_content: str) -> float:
     return score
 
 
-def passes_stage1(focus_text: str, item_content: str) -> tuple[bool, float]:
+def passes_stage1(session: Session, focus_text: str, item_content: str) -> tuple[bool, float]:
     score = similarity(focus_text, item_content)
-    return score >= settings.embedding_threshold, score
+    raw_threshold = get_cursor(session, "embedding_threshold")
+    threshold = float(raw_threshold) if raw_threshold is not None else settings.embedding_threshold
+    return score >= threshold, score

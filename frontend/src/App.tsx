@@ -3,6 +3,7 @@ import "./App.css";
 import { getFocus, getHealth, getItems, setFocus } from "./api";
 import ConnectorStatus from "./ConnectorStatus";
 import ItemCard from "./ItemCard";
+import SettingsPanel from "./SettingsPanel";
 import type { ConnectorHealth, Focus, Item } from "./types";
 
 const POLL_INTERVAL_MS = 5000;
@@ -56,6 +57,7 @@ function App() {
           Current focus: <strong>{focus?.focus_text ?? "not set"}</strong>
         </p>
         <ConnectorStatus health={health} />
+        <SettingsPanel />
         <form onSubmit={handleFocusSubmit} className="focus-form">
           <input
             value={focusInput}

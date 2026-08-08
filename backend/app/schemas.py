@@ -1,6 +1,7 @@
 from datetime import datetime
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ItemOut(BaseModel):
@@ -52,3 +53,18 @@ class ConnectorHealthOut(BaseModel):
     stale: bool
     last_error_at: datetime | None
     last_error_message: str | None
+
+
+class SettingsOut(BaseModel):
+    embedding_threshold: float
+    embedding_threshold_source: Literal["default", "override"]
+    interrupt_score_threshold: int
+    interrupt_score_threshold_source: Literal["default", "override"]
+    gmail_interrupt_score_threshold: int
+    gmail_interrupt_score_threshold_source: Literal["default", "override"]
+
+
+class SettingsIn(BaseModel):
+    embedding_threshold: float | None = Field(default=None, ge=-1, le=1)
+    interrupt_score_threshold: int | None = Field(default=None, ge=0, le=10)
+    gmail_interrupt_score_threshold: int | None = Field(default=None, ge=0, le=10)

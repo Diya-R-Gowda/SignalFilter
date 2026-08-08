@@ -6,6 +6,7 @@ from app.config import settings
 from app.models.item import Item
 from app.services import embedding, llm, notify
 from app.services.focus import get_current_focus
+from app.services.sync_state import get_cursor
 
 
 def process_item(
@@ -19,7 +20,7 @@ def process_item(
     focus_text = get_current_focus(session) or ""
 
     passed_stage1, embedding_score = (
-        embedding.passes_stage1(focus_text, content) if focus_text else (False, 0.0)
+        embedding.passes_stage1(session, focus_text, content) if focus_text else (False, 0.0)
     )
 
     item = Item(
@@ -38,11 +39,16 @@ def process_item(
         item.llm_score = score
         item.llm_reason = reason
 
-        threshold = (
+        threshold_key = (
+            "gmail_interrupt_score_threshold" if source == "gmail" else "interrupt_score_threshold"
+        )
+        threshold_default = (
             settings.gmail_interrupt_score_threshold
             if source == "gmail"
             else settings.interrupt_score_threshold
         )
+        raw_threshold = get_cursor(session, threshold_key)
+        threshold = int(raw_threshold) if raw_threshold is not None else threshold_default
         if score >= threshold:
             item.notified = True
 
