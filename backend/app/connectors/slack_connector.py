@@ -7,7 +7,7 @@ from slack_bolt.adapter.socket_mode import SocketModeHandler
 from app.config import settings
 from app.db import SessionLocal
 from app.pipeline import process_item
-from app.services.sync_state import set_cursor
+from app.services.sync_state import delete_cursor, set_cursor
 
 SLACK_HEARTBEAT_INTERVAL_SECONDS = 30
 
@@ -51,6 +51,15 @@ def _record_error(exc: Exception) -> None:
         session.close()
 
 
+def _clear_error() -> None:
+    session = SessionLocal()
+    try:
+        delete_cursor(session, "slack_last_error_at")
+        delete_cursor(session, "slack_last_error_message")
+    finally:
+        session.close()
+
+
 def start_slack_listener():
     import threading
 
@@ -67,6 +76,10 @@ def start_slack_listener():
         # main thread — breaks when this runs alongside another connector on a background
         # thread. connect() + block avoids touching signals entirely.
         handler.connect()
+
+        # A successful connect clears any previously recorded crash — /health reflects
+        # current state, not a stale failure that a human already fixed.
+        _clear_error()
 
         # Started only after connect() succeeds, so a heartbeat implies an actually-established
         # connection, not just that this function was entered. Plain threading/time.sleep only —

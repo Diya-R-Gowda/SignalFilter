@@ -9,7 +9,7 @@ from googleapiclient.discovery import build
 
 from app.db import SessionLocal
 from app.pipeline import process_item
-from app.services.sync_state import get_cursor, set_cursor
+from app.services.sync_state import delete_cursor, get_cursor, set_cursor
 
 SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 
@@ -140,6 +140,15 @@ def _record_error(exc: Exception) -> None:
         session.close()
 
 
+def _clear_error() -> None:
+    session = SessionLocal()
+    try:
+        delete_cursor(session, "gmail_last_error_at")
+        delete_cursor(session, "gmail_last_error_message")
+    finally:
+        session.close()
+
+
 def start_gmail_listener() -> None:
     try:
         service = get_gmail_service()
@@ -149,6 +158,10 @@ def start_gmail_listener() -> None:
         print(f"[gmail] failed to start: {exc}")
         _record_error(exc)
         return
+
+    # A successful connect clears any previously recorded crash — /health reflects
+    # current state, not a stale failure that a human already fixed.
+    _clear_error()
 
     print(f"[gmail] connected, polling every {POLL_INTERVAL_SECONDS}s")
 

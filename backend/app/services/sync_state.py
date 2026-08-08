@@ -15,3 +15,12 @@ def set_cursor(session: Session, key: str, value: str) -> None:
     else:
         session.add(SyncState(key=key, value=value))
     session.commit()
+
+
+def delete_cursor(session: Session, key: str) -> None:
+    # value is non-nullable, so "clear" means removing the row (get_cursor then returns
+    # None) rather than writing an empty-string sentinel.
+    state = session.get(SyncState, key)
+    if state:
+        session.delete(state)
+        session.commit()
