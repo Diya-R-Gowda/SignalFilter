@@ -24,7 +24,7 @@
 | Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
 | Connector health visibility | 🟢 Done | Heartbeats (`gmail_last_poll_at`, `slack_last_heartbeat_at`) via `SyncState`, `GET /health`, dashboard status strip — see detailed writeup below |
 | Graceful connector failure handling | 🟢 Done | Found and fixed live: a dead Slack token was crashing the whole process (and Gmail with it) at import time. Connectors now fail their own thread only, record why, and auto-clear the record on next successful start — see detailed writeup below |
-| In-dashboard tuning controls | ⚪ Not started | Week 3+ — see detailed idea below |
+| In-dashboard tuning controls | 🟡 Audited, not built | Codebase audited, plan finalized — see detailed writeup below |
 | Digest mode | ⚪ Not started | Week 3+ — see detailed idea below |
 | Attention budget | ⚪ Not started | Week 3+ — see detailed idea below |
 | Weak-signal escalation across messages | ⚪ Not started | Week 3+ — see detailed idea below |
@@ -147,17 +147,21 @@ Every incoming message runs through two stages before a notification decision is
 
 **The idea:** stop requiring a code edit + process restart every time a threshold needs adjusting. Every tuning conversation during Week 2 (embedding threshold, per-source notify threshold) ended the same way: edit `.env` or `config.py`, kill the running listener, restart it, wait for models to reload — a slow loop that also meant losing whatever the connector was mid-processing. Exposing the tunable values through the API and dashboard turns that into something adjustable live, no restart required.
 
-**How it would work:**
+**Status: audited, plan finalized, not yet built.** The audit corrected two assumptions from the original idea write-up and settled its two open questions — recorded here so the build step doesn't have to redo the analysis.
 
-- Move the tunable values (`EMBEDDING_THRESHOLD`, `INTERRUPT_SCORE_THRESHOLD`, `GMAIL_INTERRUPT_SCORE_THRESHOLD`) out of being read once at process startup via `pydantic-settings`, and into a DB-backed store read live per item — the same pattern `FocusState` already uses (append-only or single-row table, read fresh on every `process_item()` call instead of cached at import time).
-- New API endpoints: `GET /settings` and `POST /settings` (or per-key `PATCH`), reusing the existing `SyncState`-style key/value table or a small dedicated `Settings` table.
-- Dashboard: a small settings panel — number inputs or sliders for each threshold — that applies immediately to the next message processed.
-- `.env` stays as the bootstrapping default on first run; once a value is set via the dashboard, the DB value wins, mirroring how focus text already works (the `.env` file has no bearing on focus after the first `focus` command).
+**Exact read sites (three, across two files, not one):** `pipeline.py:42/44` reads `interrupt_score_threshold`/`gmail_interrupt_score_threshold` directly; `embedding_threshold` is read one layer down, inside `embedding.py:22`'s `passes_stage1()`, not in `pipeline.py` itself. Both need editing. No other file touches these three keys — `slack_connector.py`, `db.py`, and `llm.py` all import the same `settings` singleton but only for unrelated fields.
 
-**Open questions to resolve before building this:**
+**How it will work:**
 
-- Should the API validate/clamp values (e.g. score thresholds must be 0–10, embedding threshold 0–1) rather than trusting arbitrary input?
-- Does the DB value fully replace `.env` for these settings going forward, or should `.env` remain a documented fallback if the DB has no override yet?
+- Reuse `SyncState` (same pattern as heartbeats/error state) with keys `embedding_threshold`, `interrupt_score_threshold`, `gmail_interrupt_score_threshold` — matching the existing `.env` variable names exactly. No schema change needed; `get_cursor`/`set_cursor` already store everything as strings, cast at the call site (same as the Gmail history cursor and heartbeat timestamps already do).
+- `GET /settings` / `POST /settings`, mirroring the existing `GET`/`POST /focus` pair in `main.py`.
+- Dashboard: a small panel, number inputs, matching the focus-switcher's actual pattern — not optimistic, waits for the POST response before updating displayed state. One gap worth deciding at build time, not silently inherited: `handleFocusSubmit` has no `try/catch`, so a failed `POST /focus` today becomes an unhandled promise rejection with nothing shown to the user. Replicating that for settings would make the validation below (invisible) — recommend adding a `try/catch` here even though it means not matching the focus pattern 1:1.
+
+**Validation — resolved, not left open:** reject out-of-range values with a 422 rather than accepting anything, specifically because this is a dashboard, not a config file — a fast, unreviewed edit here (unlike a `.env` edit + restart) can silently produce "notifications never fire again" with no feedback. The ranges aren't invented: `llm.py:65` already hard-clamps the LLM's score to `0–10`, so `interrupt_score_threshold`/`gmail_interrupt_score_threshold` reject outside `[0, 10]`; `embedding_threshold` (cosine similarity) rejects outside its true mathematical range, `[-1, 1]`.
+
+**`.env` relationship — resolved, and corrected from the original idea:** the original write-up assumed this should mirror how focus text works. It doesn't apply — `focus.py` has **no** `.env` seeding at all (verified: no `FOCUS_TEXT` setting exists; `get_current_focus()` returns `None` with no fallback until a human runs `focus` for the first time). Thresholds need to behave differently, since — unlike focus text — they need *some* working value from the very first message, before the dashboard's ever opened. Precise rule: `.env`/`Settings` is the bootstrap default, consulted only when no `SyncState` row exists for that key. The first `POST /settings` write for a key makes that row permanent — it wins on every read from then on, including after a restart with a stale `.env` value still present; `.env` only matters again if the row is deleted manually.
+
+**Fallback on `GET /settings` with no override yet — resolved:** always return the current effective value (DB override, else the `.env` default) — never `null`/"unset". Unlike heartbeats, a never-overridden threshold isn't stale or unknown, it's a real value with no time-decay risk, so there's no reason to make the input look empty or broken on a fresh install.
 
 ## Week 3+ idea: Digest mode
 
