@@ -26,3 +26,40 @@ def init_db():
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS digested_at TIMESTAMPTZ"))
         conn.commit()
+
+        # Dedup before adding the unique constraint below, or the ALTER fails outright
+        # against any pre-existing double-voted item. Keeps the most recent row per
+        # item_id. Safe to re-run: once deduped, there's nothing left to delete.
+        conn.execute(
+            text(
+                """
+                DELETE FROM feedback
+                WHERE id NOT IN (
+                    SELECT DISTINCT ON (item_id) id
+                    FROM feedback
+                    ORDER BY item_id, created_at DESC, id DESC
+                )
+                """
+            )
+        )
+        conn.commit()
+
+        # Postgres has no ADD CONSTRAINT IF NOT EXISTS (verified: raises a syntax error),
+        # and a DO block catching duplicate_object doesn't work either — a duplicate unique
+        # constraint actually raises DuplicateTable, not duplicate_object. Checking
+        # pg_constraint directly is the reliable idempotent path, tested on every startup.
+        conn.execute(
+            text(
+                """
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM pg_constraint WHERE conname = 'feedback_item_id_unique'
+                    ) THEN
+                        ALTER TABLE feedback ADD CONSTRAINT feedback_item_id_unique UNIQUE (item_id);
+                    END IF;
+                END $$;
+                """
+            )
+        )
+        conn.commit()

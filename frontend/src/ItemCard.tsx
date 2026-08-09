@@ -1,16 +1,23 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Item } from "./types";
 import { sendFeedback } from "./api";
 
 export default function ItemCard({ item }: { item: Item }) {
-  const [feedback, setFeedback] = useState<boolean | null>(null);
+  const [feedback, setFeedback] = useState<boolean | null>(item.feedback);
+
+  // item.feedback reflects the server's current vote (post-reload); keep local display in
+  // sync if the underlying item prop changes (e.g. a fresh poll after voting elsewhere).
+  useEffect(() => {
+    setFeedback(item.feedback);
+  }, [item.feedback]);
 
   async function handleFeedback(thumbsUp: boolean) {
+    const previous = feedback;
     setFeedback(thumbsUp);
     try {
       await sendFeedback(item.id, thumbsUp);
     } catch {
-      setFeedback(null);
+      setFeedback(previous);
     }
   }
 

@@ -21,6 +21,7 @@ class ItemOut(BaseModel):
     notified: bool
     created_at: datetime
     digested_at: datetime | None
+    feedback: bool | None
 
 
 class FocusOut(BaseModel):
@@ -69,3 +70,10 @@ class SettingsIn(BaseModel):
     embedding_threshold: float | None = Field(default=None, ge=-1, le=1)
     interrupt_score_threshold: int | None = Field(default=None, ge=0, le=10)
     gmail_interrupt_score_threshold: int | None = Field(default=None, ge=0, le=10)
+
+
+class FeedbackInsightOut(BaseModel):
+    threshold: str
+    direction: Literal["raise", "lower"] | None
+    informative_votes: int
+    gate_met: bool

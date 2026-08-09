@@ -12,6 +12,7 @@ from app.models.item import Item
 from app.schemas import (
     ConnectorHealthOut,
     FeedbackIn,
+    FeedbackInsightOut,
     FeedbackOut,
     FocusIn,
     FocusOut,
@@ -65,7 +66,18 @@ def list_items(
         stmt = stmt.where(Item.source == source)
     if notified is not None:
         stmt = stmt.where(Item.notified == notified)
-    return list(session.execute(stmt).scalars().all())
+    items = list(session.execute(stmt).scalars().all())
+
+    # Item has no feedback relationship — attach each item's existing vote (if any) as a
+    # plain instance attribute so ItemOut.feedback picks it up via from_attributes.
+    feedback_stmt = select(Feedback.item_id, Feedback.thumbs_up).where(
+        Feedback.item_id.in_([item.id for item in items])
+    )
+    feedback_by_item = dict(session.execute(feedback_stmt).all())
+    for item in items:
+        item.feedback = feedback_by_item.get(item.id)
+
+    return items
 
 
 @app.get("/focus", response_model=FocusOut | None)
@@ -84,8 +96,15 @@ def create_feedback(item_id: str, body: FeedbackIn, session: Session = Depends(g
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    feedback = Feedback(item_id=item_id, thumbs_up=body.thumbs_up)
-    session.add(feedback)
+    # Upsert, not insert — feedback_item_id_unique makes one vote per item the only valid
+    # state; voting again replaces the previous vote rather than adding a second row.
+    feedback = session.query(Feedback).filter(Feedback.item_id == item_id).first()
+    if feedback:
+        feedback.thumbs_up = body.thumbs_up
+        feedback.created_at = datetime.now(timezone.utc)
+    else:
+        feedback = Feedback(item_id=item_id, thumbs_up=body.thumbs_up)
+        session.add(feedback)
     session.commit()
     session.refresh(feedback)
     return feedback
@@ -117,6 +136,62 @@ def update_settings(body: SettingsIn, session: Session = Depends(get_session)) -
     for key, value in body.model_dump(exclude_none=True).items():
         set_cursor(session, key, str(value))
     return _read_tuning_settings(session)
+
+
+@app.get("/feedback/insights", response_model=list[FeedbackInsightOut])
+def read_feedback_insights(session: Session = Depends(get_session)) -> list[FeedbackInsightOut]:
+    # Computed live from Feedback + Item on every call — no SyncState key, same philosophy
+    # as /health computing current status fresh rather than caching it. Only six specific
+    # state/vote combinations are informative; everything else contributes nothing, per the
+    # audit: a thumbs-down on an already-filtered item just confirms current behavior.
+    stmt = select(
+        Feedback.thumbs_up, Item.source, Item.passed_stage1, Item.llm_score, Item.notified
+    ).join(Item, Feedback.item_id == Item.id)
+
+    counts = {
+        "embedding_threshold": {"raise": 0, "lower": 0},
+        "interrupt_score_threshold": {"raise": 0, "lower": 0},
+        "gmail_interrupt_score_threshold": {"raise": 0, "lower": 0},
+    }
+
+    for thumbs_up, source, passed_stage1, llm_score, notified in session.execute(stmt).all():
+        score_threshold_key = (
+            "gmail_interrupt_score_threshold" if source == "gmail" else "interrupt_score_threshold"
+        )
+        if notified:
+            if not thumbs_up:
+                counts[score_threshold_key]["raise"] += 1
+        elif passed_stage1 and llm_score is not None:
+            if thumbs_up:
+                counts[score_threshold_key]["lower"] += 1
+        else:
+            if thumbs_up:
+                counts["embedding_threshold"]["lower"] += 1
+
+    results = []
+    for key in ("embedding_threshold", "interrupt_score_threshold", "gmail_interrupt_score_threshold"):
+        raise_votes = counts[key]["raise"]
+        lower_votes = counts[key]["lower"]
+        if raise_votes == 0 and lower_votes == 0:
+            direction = None
+            informative_votes = 0
+        elif raise_votes >= lower_votes:
+            # Ties go to "raise" — an arbitrary but deterministic tiebreak, since both
+            # directions being equally supported gives no real basis to prefer either.
+            direction = "raise"
+            informative_votes = raise_votes
+        else:
+            direction = "lower"
+            informative_votes = lower_votes
+        results.append(
+            FeedbackInsightOut(
+                threshold=key,
+                direction=direction,
+                informative_votes=informative_votes,
+                gate_met=informative_votes >= settings.feedback_min_votes,
+            )
+        )
+    return results
 
 
 @app.get("/health", response_model=list[ConnectorHealthOut])

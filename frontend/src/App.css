@@ -92,6 +92,13 @@ header h1 {
   margin: 0;
 }
 
+.settings-suggestion {
+  color: var(--text);
+  font-size: 12px;
+  font-style: italic;
+  margin: 0;
+}
+
 .settings-panel button {
   padding: 8px 14px;
   border: 1px solid var(--accent);

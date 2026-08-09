@@ -1,4 +1,4 @@
-import type { ConnectorHealth, Focus, Item, Settings, SettingsUpdate } from "./types";
+import type { ConnectorHealth, FeedbackInsight, Focus, Item, Settings, SettingsUpdate } from "./types";
 
 const API_BASE = "http://localhost:8000";
 
@@ -84,4 +84,10 @@ export async function sendFeedback(itemId: string, thumbsUp: boolean): Promise<v
     body: JSON.stringify({ thumbs_up: thumbsUp }),
   });
   if (!res.ok) throw new Error(`POST /items/${itemId}/feedback failed: ${res.status}`);
+}
+
+export async function getFeedbackInsights(): Promise<FeedbackInsight[]> {
+  const res = await fetch(`${API_BASE}/feedback/insights`);
+  if (!res.ok) throw new Error(`GET /feedback/insights failed: ${res.status}`);
+  return res.json();
 }

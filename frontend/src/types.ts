@@ -13,6 +13,7 @@ export interface Item {
   notified: boolean;
   created_at: string;
   digested_at: string | null;
+  feedback: boolean | null;
 }
 
 export interface Focus {
@@ -44,4 +45,11 @@ export interface SettingsUpdate {
   embedding_threshold?: number;
   interrupt_score_threshold?: number;
   gmail_interrupt_score_threshold?: number;
+}
+
+export interface FeedbackInsight {
+  threshold: "embedding_threshold" | "interrupt_score_threshold" | "gmail_interrupt_score_threshold";
+  direction: "raise" | "lower" | null;
+  informative_votes: number;
+  gate_met: boolean;
 }

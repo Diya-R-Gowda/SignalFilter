@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
-import { getSettings, SettingsValidationError, updateSettings } from "./api";
-import type { Settings } from "./types";
+import { getFeedbackInsights, getSettings, SettingsValidationError, updateSettings } from "./api";
+import type { FeedbackInsight, Settings } from "./types";
+
+// Must match backend/app/config.py's feedback_min_votes — the API reports informative_votes
+// and gate_met but not the denominator itself, since it's a backend constant, not a setting.
+const FEEDBACK_MIN_VOTES = 10;
 
 interface FieldConfig {
   key: "embedding_threshold" | "interrupt_score_threshold" | "gmail_interrupt_score_threshold";
@@ -18,8 +22,18 @@ const FIELDS: FieldConfig[] = [
   { key: "gmail_interrupt_score_threshold", sourceKey: "gmail_interrupt_score_threshold_source", label: "Gmail notify threshold", step: "1" },
 ];
 
+function suggestionText(insight: FeedbackInsight | undefined): string | null {
+  if (!insight) return null;
+  if (!insight.gate_met) {
+    return `${insight.informative_votes}/${FEEDBACK_MIN_VOTES} votes so far — not enough data yet`;
+  }
+  const verb = insight.direction === "raise" ? "raising" : "lowering";
+  return `${insight.informative_votes}/${FEEDBACK_MIN_VOTES} votes suggest ${verb} this threshold`;
+}
+
 export default function SettingsPanel() {
   const [settings, setSettingsState] = useState<Settings | null>(null);
+  const [insights, setInsights] = useState<FeedbackInsight[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -36,6 +50,11 @@ export default function SettingsPanel() {
       })
       .catch(() => {
         // Settings failing to load isn't fatal to the rest of the dashboard — panel just stays hidden.
+      });
+    getFeedbackInsights()
+      .then(setInsights)
+      .catch(() => {
+        // Insights are a bonus hint, not core functionality — silently skip on failure.
       });
   }, []);
 
@@ -83,6 +102,10 @@ export default function SettingsPanel() {
             onChange={(e) => setDraft((d) => ({ ...d, [key]: e.target.value }))}
           />
           {fieldErrors[key] && <p className="settings-error">{fieldErrors[key]}</p>}
+          {(() => {
+            const text = suggestionText(insights.find((i) => i.threshold === key));
+            return text && <p className="settings-suggestion">{text}</p>;
+          })()}
         </div>
       ))}
       {fieldErrors._general && <p className="settings-error">{fieldErrors._general}</p>}
