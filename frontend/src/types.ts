@@ -12,6 +12,7 @@ export interface Item {
   llm_reason: string | null;
   notified: boolean;
   created_at: string;
+  digested_at: string | null;
 }
 
 export interface Focus {

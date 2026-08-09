@@ -39,13 +39,19 @@ def cmd_run(args: argparse.Namespace) -> None:
         from app.connectors.gmail_connector import start_gmail_listener
         listeners.append(("Gmail (polling)", start_gmail_listener))
 
+    import threading
+
+    from app.digest import start_digest_scheduler
+
+    # Not per-connector — reads across all sources regardless of --source, so it starts
+    # exactly once here rather than inside either connector module.
+    threading.Thread(target=start_digest_scheduler, daemon=True).start()
+
     if len(listeners) == 1:
         name, start_fn = listeners[0]
         print(f"Listening on {name}... Ctrl+C to stop.")
         start_fn()
         return
-
-    import threading
 
     print(f"Listening on {', '.join(name for name, _ in listeners)}... Ctrl+C to stop.")
     threads = [threading.Thread(target=start_fn, daemon=True) for _, start_fn in listeners]

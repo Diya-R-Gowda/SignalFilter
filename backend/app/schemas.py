@@ -20,6 +20,7 @@ class ItemOut(BaseModel):
     llm_reason: str | None
     notified: bool
     created_at: datetime
+    digested_at: datetime | None
 
 
 class FocusOut(BaseModel):

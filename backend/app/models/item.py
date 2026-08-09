@@ -27,3 +27,4 @@ class Item(Base):
 
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    digested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

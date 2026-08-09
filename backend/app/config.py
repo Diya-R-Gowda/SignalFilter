@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     interrupt_score_threshold: int = 4
     gmail_interrupt_score_threshold: int = 7
 
+    digest_time: str = "18:00"
+
     class Config:
         env_file = ".env"
 

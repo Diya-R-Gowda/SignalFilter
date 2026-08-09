@@ -43,9 +43,16 @@ function App() {
 
   const isLowRelevance = (item: Item) =>
     !item.passed_stage1 || (item.llm_score !== null && item.llm_score <= 1);
+  const isDigestWorthy = (item: Item) =>
+    item.passed_stage1 &&
+    item.llm_score !== null &&
+    item.llm_score > 1 &&
+    !item.notified &&
+    item.digested_at === null;
 
   const surfaced = items.filter((item) => item.notified);
   const filtered = items.filter((item) => !item.notified);
+  const digest = items.filter(isDigestWorthy);
   const lowRelevanceCount = filtered.filter(isLowRelevance).length;
   const visibleFiltered = showLowRelevance ? filtered : filtered.filter((item) => !isLowRelevance(item));
 
@@ -74,6 +81,14 @@ function App() {
           <h2>Surfaced ({surfaced.length})</h2>
           {surfaced.length === 0 && <p className="empty">Nothing notified yet.</p>}
           {surfaced.map((item) => (
+            <ItemCard key={item.id} item={item} />
+          ))}
+        </section>
+
+        <section>
+          <h2>Digest ({digest.length})</h2>
+          {digest.length === 0 && <p className="empty">Nothing digest-worthy right now.</p>}
+          {digest.map((item) => (
             <ItemCard key={item.id} item={item} />
           ))}
         </section>
