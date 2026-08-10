@@ -61,6 +61,54 @@ def cmd_run(args: argparse.Namespace) -> None:
         thread.join()
 
 
+def cmd_audit(args: argparse.Namespace) -> None:
+    import json
+    from pathlib import Path
+
+    from app.services.embedding import similarity
+    from app.services.llm import score_item
+
+    golden_set_path = Path(__file__).resolve().parent.parent / "tests" / "golden_set.json"
+    with open(golden_set_path, encoding="utf-8") as f:
+        golden_set = json.load(f)
+
+    total = 0
+    failures = 0
+
+    for case in golden_set["llm_cases"]:
+        total += 1
+        actual_score, actual_reason = score_item(
+            case["focus_text"], case["content"], case["sender"], case["source"]
+        )
+        if actual_score == case["expected_score"]:
+            print(f"PASS  llm/{case['name']}")
+        else:
+            failures += 1
+            print(
+                f"FAIL  llm/{case['name']}: expected score {case['expected_score']}, "
+                f"got {actual_score} (reason: {actual_reason!r})"
+            )
+
+    for case in golden_set["embedding_cases"]:
+        total += 1
+        actual_similarity = similarity(case["focus_text"], case["content"])
+        # Tight epsilon rather than exact float equality — determinism was verified
+        # live (23 LLM calls, 6 embedding calls, zero variance), this just guards
+        # against harmless float round-tripping through JSON serialization.
+        if abs(actual_similarity - case["expected_similarity"]) < 1e-4:
+            print(f"PASS  embedding/{case['name']}")
+        else:
+            failures += 1
+            print(
+                f"FAIL  embedding/{case['name']}: expected similarity "
+                f"{case['expected_similarity']}, got {actual_similarity}"
+            )
+
+    print(f"\n{total - failures}/{total} passed")
+    if failures:
+        sys.exit(1)
+
+
 def main() -> None:
     # Message content (Slack/Gmail) can contain emoji or other non-ASCII characters. Windows'
     # default console/file encoding (cp1252) can't print those, crashing mid-poll and — for
@@ -84,6 +132,11 @@ def main() -> None:
         help="Which connector(s) to run (default: all)",
     )
     run_parser.set_defaults(func=cmd_run)
+
+    audit_parser = subparsers.add_parser(
+        "audit", help="Run the golden-set regression check against the LLM judge and embedding model"
+    )
+    audit_parser.set_defaults(func=cmd_audit)
 
     args = parser.parse_args()
     args.func(args)

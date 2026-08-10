@@ -1,0 +1,72 @@
+{
+  "llm_cases": [
+    {
+      "name": "empty_content",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "",
+      "sender": "unknown",
+      "source": "gmail",
+      "expected_score": 2,
+      "note": "The actual Week 2 failure mode: empty content still gets a plausible-sounding hallucinated score instead of a defensive default. Never fixed inside llm.py itself, only worked around at the Gmail connector's caller."
+    },
+    {
+      "name": "marketing_bulk_mail",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "Big Summer Sale! Get 50% off all products this week only. Shop now before it is gone!\n\nUnsubscribe from these emails",
+      "sender": "deals@retailstore.com",
+      "source": "gmail",
+      "expected_score": 0,
+      "note": "SYSTEM_PROMPT's explicit hardcoded rule: bulk/marketing mail always scores 0-1 regardless of topic overlap."
+    },
+    {
+      "name": "casual_on_topic_checkin",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "how is the migration going?",
+      "sender": "teammate",
+      "source": "slack",
+      "expected_score": 9,
+      "note": "SYSTEM_PROMPT's explicit 'casual != irrelevant' instruction. Recorded as-observed: the model actually scores this high (9), not the mid-range a human might guess from the 'casual check-in' band description alone -- the golden set baselines real behavior, not intended behavior."
+    },
+    {
+      "name": "urgent_on_topic",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "the billing migration is blocking the release, can you look at it now?",
+      "sender": "manager",
+      "source": "slack",
+      "expected_score": 8,
+      "note": "Baseline high-score sanity check."
+    },
+    {
+      "name": "clearly_off_topic",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "anyone want to grab coffee later?",
+      "sender": "coworker",
+      "source": "slack",
+      "expected_score": 0,
+      "note": "Baseline low-score sanity check."
+    }
+  ],
+  "embedding_cases": [
+    {
+      "name": "short_borderline_relevant",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "billing update?",
+      "expected_similarity": 0.5135617852210999,
+      "note": "The literal Week 1 failure mode: a short on-topic message scoring lower than a longer one, motivating the original stage-1 threshold-too-high bug."
+    },
+    {
+      "name": "long_clearly_relevant",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "Just wanted to give you a full status update on the billing service migration project. We finished moving the payment processing endpoints over to the new API yesterday, and today we are working through the remaining edge cases in the invoicing module before we can call the whole migration complete.",
+      "expected_similarity": 0.7548331022262573,
+      "note": "Sanity check the model rewards genuine relevance, not just length."
+    },
+    {
+      "name": "clearly_irrelevant",
+      "focus_text": "migrating the billing service to the new API",
+      "content": "what is everyone doing this weekend? thinking of going hiking if the weather holds up",
+      "expected_similarity": 0.01544375903904438,
+      "note": "Baseline low-similarity sanity check."
+    }
+  ]
+}
