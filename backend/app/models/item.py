@@ -28,3 +28,13 @@ class Item(Base):
     notified: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     digested_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Attention budget: set instead of notified=True when the daily budget is exhausted;
+    # cleared back to NULL (with notified flipped True) on the next batch release.
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Weak-signal escalation: embedding_vector is the item's own content embedding
+    # (JSON-encoded list of floats), computed only for items that passed stage 1.
+    # cluster_count is how many similar recent items existed at scoring time.
+    embedding_vector: Mapped[str | None] = mapped_column(Text, nullable=True)
+    cluster_count: Mapped[int | None] = mapped_column(Integer, nullable=True)

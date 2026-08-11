@@ -13,6 +13,8 @@ export interface Item {
   notified: boolean;
   created_at: string;
   digested_at: string | null;
+  queued_at: string | null;
+  cluster_count: number | null;
   feedback: boolean | null;
 }
 

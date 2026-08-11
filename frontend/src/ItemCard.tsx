@@ -2,6 +2,12 @@ import { useEffect, useState } from "react";
 import type { Item } from "./types";
 import { sendFeedback } from "./api";
 
+// Display threshold for the "related messages" badge — distinct from
+// embedding.py's CLUSTER_SIMILARITY_THRESHOLD (0.85, decides what counts as a similar
+// pair) and its own storage-side count. This just decides when a computed count is
+// worth surfacing visually.
+const CLUSTER_DISPLAY_THRESHOLD = 3;
+
 export default function ItemCard({ item }: { item: Item }) {
   const [feedback, setFeedback] = useState<boolean | null>(item.feedback);
 
@@ -27,6 +33,9 @@ export default function ItemCard({ item }: { item: Item }) {
         <span className="item-source">{item.source}</span>
         <span className="item-sender">{item.sender}</span>
         <span className="item-time">{new Date(item.created_at).toLocaleTimeString()}</span>
+        {item.cluster_count !== null && item.cluster_count >= CLUSTER_DISPLAY_THRESHOLD && (
+          <span className="cluster-badge">{item.cluster_count} related messages in the last 24h</span>
+        )}
       </div>
       <p className="item-content">{item.content}</p>
       <div className="item-footer">

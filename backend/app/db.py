@@ -25,6 +25,9 @@ def init_db():
     # own migration step. IF NOT EXISTS makes this safe to run on every startup.
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS digested_at TIMESTAMPTZ"))
+        conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS queued_at TIMESTAMPTZ"))
+        conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS embedding_vector TEXT"))
+        conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS cluster_count INTEGER"))
         conn.commit()
 
         # Dedup before adding the unique constraint below, or the ALTER fails outright

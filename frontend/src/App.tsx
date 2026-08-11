@@ -8,6 +8,24 @@ import type { ConnectorHealth, Focus, Item } from "./types";
 
 const POLL_INTERVAL_MS = 5000;
 
+// Must match backend/app/config.py's attention_budget_daily — a plain backend constant,
+// not exposed via /settings, same pattern as SettingsPanel.tsx's FEEDBACK_MIN_VOTES.
+const ATTENTION_BUDGET_DAILY = 10;
+
+// item.created_at comes back from the API with no timezone suffix even though the
+// underlying value is UTC wall-clock (the DB column has no tz). Appending "Z" makes JS
+// parse it as UTC rather than (incorrectly) local time, so the local-calendar-day
+// comparison below actually lines up with the backend's own local-midnight boundary.
+function isLocalToday(utcIsoString: string): boolean {
+  const parsed = new Date(utcIsoString.endsWith("Z") ? utcIsoString : `${utcIsoString}Z`);
+  const now = new Date();
+  return (
+    parsed.getFullYear() === now.getFullYear() &&
+    parsed.getMonth() === now.getMonth() &&
+    parsed.getDate() === now.getDate()
+  );
+}
+
 function App() {
   const [items, setItems] = useState<Item[]>([]);
   const [focus, setFocusState] = useState<Focus | null>(null);
@@ -48,13 +66,17 @@ function App() {
     item.llm_score !== null &&
     item.llm_score > 1 &&
     !item.notified &&
-    item.digested_at === null;
+    item.digested_at === null &&
+    item.queued_at === null;
+  const isQueued = (item: Item) => item.queued_at !== null;
 
   const surfaced = items.filter((item) => item.notified);
-  const filtered = items.filter((item) => !item.notified);
+  const filtered = items.filter((item) => !item.notified && !isQueued(item));
   const digest = items.filter(isDigestWorthy);
+  const queued = items.filter(isQueued);
   const lowRelevanceCount = filtered.filter(isLowRelevance).length;
   const visibleFiltered = showLowRelevance ? filtered : filtered.filter((item) => !isLowRelevance(item));
+  const notifiedToday = items.filter((item) => item.notified && isLocalToday(item.created_at)).length;
 
   return (
     <div className="app">
@@ -64,6 +86,9 @@ function App() {
           Current focus: <strong>{focus?.focus_text ?? "not set"}</strong>
         </p>
         <ConnectorStatus health={health} />
+        <p className="budget-indicator">
+          {notifiedToday}/{ATTENTION_BUDGET_DAILY} notifications used today
+        </p>
         <SettingsPanel />
         <form onSubmit={handleFocusSubmit} className="focus-form">
           <input
@@ -81,6 +106,15 @@ function App() {
           <h2>Surfaced ({surfaced.length})</h2>
           {surfaced.length === 0 && <p className="empty">Nothing notified yet.</p>}
           {surfaced.map((item) => (
+            <ItemCard key={item.id} item={item} />
+          ))}
+        </section>
+
+        <section className="queued-section">
+          <h2>Queued ({queued.length})</h2>
+          <p className="queued-hint">Cleared the notify threshold but held back by today's attention budget.</p>
+          {queued.length === 0 && <p className="empty">Nothing queued right now.</p>}
+          {queued.map((item) => (
             <ItemCard key={item.id} item={item} />
           ))}
         </section>

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
 
     digest_time: str = "18:00"
     feedback_min_votes: int = 10
+    attention_budget_daily: int = 10
 
     class Config:
         env_file = ".env"

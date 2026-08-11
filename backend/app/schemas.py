@@ -21,6 +21,8 @@ class ItemOut(BaseModel):
     notified: bool
     created_at: datetime
     digested_at: datetime | None
+    queued_at: datetime | None
+    cluster_count: int | None
     feedback: bool | None
 
 

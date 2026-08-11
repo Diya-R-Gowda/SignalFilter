@@ -13,6 +13,7 @@ from app.services.sync_state import get_cursor, set_cursor
 CHECK_INTERVAL_SECONDS = 300
 BACKFILL_MARKER_KEY = "digest_backfill_done"
 LAST_RUN_KEY = "digest_last_run_date"
+BUDGET_RELEASE_LAST_RUN_KEY = "budget_last_release_date"
 
 
 def _run_backfill_once() -> None:
@@ -48,6 +49,7 @@ def _run_digest_check() -> None:
             Item.llm_score > 1,
             Item.notified == False,  # noqa: E712
             Item.digested_at.is_(None),
+            Item.queued_at.is_(None),  # budget-queued items are a separate state, never a digest item
         )
         items = list(session.execute(stmt).scalars().all())
 
@@ -74,6 +76,39 @@ def _run_digest_check() -> None:
         session.close()
 
 
+def _run_budget_release_check() -> None:
+    session = SessionLocal()
+    try:
+        today = date.today().isoformat()
+        if get_cursor(session, BUDGET_RELEASE_LAST_RUN_KEY) == today:
+            return  # already released today
+
+        stmt = select(Item).where(Item.queued_at.is_not(None))
+        items = list(session.execute(stmt).scalars().all())
+
+        # Fire exactly as originally scored — the item already cleared the notify threshold
+        # once, that's why it queued, so it isn't re-evaluated against whatever the
+        # threshold happens to be now. Persist before the toast, same reasoning as elsewhere.
+        if items:
+            for item in items:
+                item.notified = True
+                item.queued_at = None
+
+        set_cursor(session, BUDGET_RELEASE_LAST_RUN_KEY, today)  # commits the session
+
+        if items:
+            threading.Thread(
+                target=notify.send_notification,
+                kwargs={
+                    "title": "Signal Filter — Queued items released",
+                    "body": f"{len(items)} queued items just released",
+                },
+                daemon=True,
+            ).start()
+    finally:
+        session.close()
+
+
 def start_digest_scheduler() -> None:
     print(f"[digest] scheduler starting, checking every {CHECK_INTERVAL_SECONDS}s, daily at {settings.digest_time}")
     _run_backfill_once()
@@ -82,4 +117,8 @@ def start_digest_scheduler() -> None:
             _run_digest_check()
         except Exception as exc:
             print(f"[digest] check failed: {exc}")
+        try:
+            _run_budget_release_check()
+        except Exception as exc:
+            print(f"[budget] release check failed: {exc}")
         time.sleep(CHECK_INTERVAL_SECONDS)
