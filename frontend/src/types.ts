@@ -21,6 +21,8 @@ export interface Item {
 export interface Focus {
   focus_text: string;
   created_at: string;
+  source: "manual" | "calendar" | null;
+  calendar_busy: boolean;
 }
 
 export interface ConnectorHealth {

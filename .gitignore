@@ -2,6 +2,7 @@ backend/venv/
 backend/.env
 backend/credentials.json
 backend/token.json
+backend/calendar_token.json
 frontend/node_modules/
 frontend/dist/
 __pycache__/

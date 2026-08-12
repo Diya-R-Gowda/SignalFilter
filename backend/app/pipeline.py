@@ -29,6 +29,14 @@ def _todays_notified_count(session: Session) -> int:
     return session.execute(stmt).scalar() or 0
 
 
+def _is_calendar_busy(session: Session) -> bool:
+    raw = get_cursor(session, "calendar_busy_until")
+    if raw is None:
+        return False
+    busy_until = datetime.fromisoformat(raw)
+    return datetime.now(timezone.utc) < busy_until
+
+
 def process_item(
     session: Session,
     source: str,
@@ -80,6 +88,13 @@ def process_item(
         )
         raw_threshold = get_cursor(session, threshold_key)
         threshold = int(raw_threshold) if raw_threshold is not None else threshold_default
+        if _is_calendar_busy(session):
+            # Raises the notify bar only — never touches item.llm_score itself, and the
+            # score >= 9 bypass just below still reads the raw score unmodified, so a
+            # genuinely urgent message notifies during a meeting exactly as it does outside
+            # one. A suppressed item that still passed_stage1 with llm_score > 1 falls
+            # through to the existing Digest section on its own — no new state needed.
+            threshold = max(threshold, 9)
         if score >= threshold:
             # Scores of 9-10 always bypass the attention budget. This is a starting
             # assumption based on only one real 9-10 ever occurring in this project's

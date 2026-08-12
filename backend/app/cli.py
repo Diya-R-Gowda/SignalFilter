@@ -41,11 +41,14 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     import threading
 
+    from app.connectors.calendar_connector import start_calendar_listener
     from app.digest import start_digest_scheduler
 
-    # Not per-connector — reads across all sources regardless of --source, so it starts
-    # exactly once here rather than inside either connector module.
+    # Not per-connector-source — calendar informs every incoming message regardless of
+    # which of Slack/Gmail is running, same "starts exactly once" requirement digest
+    # mode established, so it's not gated behind --source the way Slack/Gmail are.
     threading.Thread(target=start_digest_scheduler, daemon=True).start()
+    threading.Thread(target=start_calendar_listener, daemon=True).start()
 
     if len(listeners) == 1:
         name, start_fn = listeners[0]

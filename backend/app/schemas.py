@@ -31,6 +31,8 @@ class FocusOut(BaseModel):
 
     focus_text: str
     created_at: datetime
+    source: str | None
+    calendar_busy: bool
 
 
 class FocusIn(BaseModel):

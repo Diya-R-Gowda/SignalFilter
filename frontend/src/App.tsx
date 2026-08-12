@@ -84,11 +84,15 @@ function App() {
         <h1>Signal Filter</h1>
         <p className="current-focus">
           Current focus: <strong>{focus?.focus_text ?? "not set"}</strong>
+          {focus?.source === "calendar" && <span className="focus-source-hint"> (auto, from calendar)</span>}
         </p>
         <ConnectorStatus health={health} />
         <p className="budget-indicator">
           {notifiedToday}/{ATTENTION_BUDGET_DAILY} notifications used today
         </p>
+        {focus?.calendar_busy && (
+          <p className="meeting-indicator">In a meeting — notify threshold raised</p>
+        )}
         <SettingsPanel />
         <form onSubmit={handleFocusSubmit} className="focus-form">
           <input

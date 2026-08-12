@@ -29,6 +29,7 @@ from app.services.sync_state import get_cursor, set_cursor
 CONNECTOR_HEALTH_CONFIG = [
     ("gmail", "gmail_last_poll_at", 120),
     ("slack", "slack_last_heartbeat_at", 90),
+    ("calendar", "calendar_last_poll_at", 540),  # 3x calendar_connector's 180s poll interval
 ]
 
 # (SyncState key, caster) — matches the three tunable fields on Settings exactly;
@@ -80,9 +81,22 @@ def list_items(
     return items
 
 
+def _is_calendar_busy(session: Session) -> bool:
+    raw = get_cursor(session, "calendar_busy_until")
+    if raw is None:
+        return False
+    return datetime.now(timezone.utc) < datetime.fromisoformat(raw)
+
+
 @app.get("/focus", response_model=FocusOut | None)
 def read_focus(session: Session = Depends(get_session)):
-    return get_current_focus_state(session)
+    state = get_current_focus_state(session)
+    if state is None:
+        return None
+    # calendar_busy isn't a FocusState column — attached as a plain instance attribute so
+    # FocusOut picks it up via from_attributes, same pattern list_items() uses for feedback.
+    state.calendar_busy = _is_calendar_busy(session)
+    return state
 
 
 @app.post("/focus", response_model=FocusOut)
