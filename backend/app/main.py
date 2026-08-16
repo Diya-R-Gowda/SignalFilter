@@ -101,7 +101,11 @@ def read_focus(session: Session = Depends(get_session)):
 
 @app.post("/focus", response_model=FocusOut)
 def update_focus(body: FocusIn, session: Session = Depends(get_session)):
-    return set_focus(session, body.focus_text)
+    state = set_focus(session, body.focus_text)
+    # Same attachment read_focus does — a manual POST can happen mid-meeting, so this must
+    # reflect current calendar state too, not just whatever was true before the write.
+    state.calendar_busy = _is_calendar_busy(session)
+    return state
 
 
 @app.post("/items/{item_id}/feedback", response_model=FeedbackOut)
