@@ -37,25 +37,7 @@ npm run dev
 
 Then open `http://localhost:5173`. Let me know if anything looks broken or the layout needs work — it's intentionally minimal styling for now.
 
-## 3. Enable the Google Calendar API (needed before the calendar connector can poll)
-
-OAuth consent for Calendar is done — `backend/calendar_token.json` was created successfully
-and Gmail's own token was confirmed untouched. But the first live poll call failed:
-
-```
-Google Calendar API has not been used in project 1019765749844 before or it is disabled.
-Enable it by visiting
-https://console.developers.google.com/apis/api/calendar-json.googleapis.com/overview?project=1019765749844
-then retry. If you enabled this API recently, wait a few minutes for the action to
-propagate to our systems and retry.
-```
-
-1. Visit the URL above (or go to console.cloud.google.com → APIs & Services → Library →
-   search "Google Calendar API" → **Enable**, same project you already used for Gmail).
-2. Google says it can take a few minutes to propagate — no need to wait around, just let
-   me know once you've clicked Enable and I'll retry.
-
-## 4. Test the Gmail connector live (after #1 above)
+## 3. Test the Gmail connector live (after #1 above) — done, live traffic flowing for days
 
 Once `backend/credentials.json` exists: `./venv/Scripts/python.exe -m app.cli run --source gmail` (or `--source all` to run Slack + Gmail together), approve the OAuth prompt in the browser that opens, then send yourself a test email and check it shows up in the CLI output / dashboard.
 
