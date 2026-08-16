@@ -33,8 +33,18 @@ Every message is logged to Postgres regardless of outcome (`filtered` / `scored`
 | FastAPI HTTP API | 🟢 Done | `GET/POST /focus`, `GET /items`, `POST /items/{id}/feedback` — smoke-tested against the real DB |
 | Gmail connector | 🟢 Done | Polls Gmail's `history.list`, live-tested against a real inbox — correctly scored and filtered a real test email |
 | React dashboard + 👍/👎 feedback UI | 🟡 Built, not yet run in a browser | `frontend/` — Vite + React + TS, type-checks and builds cleanly |
-| Feedback-driven threshold tuning | ⚪ Not started | Week 3+ |
-| Calendar integration / auto-focus detection | ⚪ Not started | Week 3+, long-term |
+| Feedback-driven threshold tuning | 🟢 Done | `GET /feedback/insights` suggests threshold changes from real 👍/👎 history, applied manually via the Settings panel |
+| Connector health visibility | 🟢 Done | Heartbeats + `GET /health` + dashboard status strip |
+| Graceful connector failure handling | 🟢 Done | A dead credential fails only its own connector thread, never the whole process |
+| In-dashboard tuning controls | 🟢 Done | `GET`/`POST /settings` + `SettingsPanel.tsx`, live overrides with no restart needed |
+| Digest mode | 🟢 Done | Daily summary toast for below-threshold items that were still worth a look |
+| Attention budget | 🟢 Done | Per-day notification cap with batch release, always bypassed by a 9-10 score |
+| Weak-signal escalation across messages | 🟢 Done | Dashboard flag when several similar messages land close together — never triggers a notification on its own |
+| Self-auditing the AI judge (golden-set regression) | 🟢 Done | `python -m app.cli audit` catches real scoring regressions against hand-recorded cases |
+| Calendar integration / auto-focus detection | 🟢 Done | Meeting-derived focus text + a temporarily stricter notify threshold while in a real calendar meeting |
+| On-device personalization via local fine-tuning | ⚪ Deferred | Audited — not enough real feedback volume yet to justify it; concrete re-trigger condition set in `CONTRIBUTING.md` |
+| Per-sender adaptive trust | ⚪ Deferred | Audited — no sender in real usage currently meets the bar to justify it; concrete re-trigger condition set in `CONTRIBUTING.md` |
+| Flow-state-aware dynamic strictness | ⚪ Not started | Week 3+ |
 
 This README covers "how do I get it running." For the full architecture, decision rationale, and week-by-week plan, see [`CONTRIBUTING.md`](CONTRIBUTING.md).
 

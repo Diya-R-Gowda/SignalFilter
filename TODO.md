@@ -41,6 +41,17 @@ Then open `http://localhost:5173`. Let me know if anything looks broken or the l
 
 Once `backend/credentials.json` exists: `./venv/Scripts/python.exe -m app.cli run --source gmail` (or `--source all` to run Slack + Gmail together), approve the OAuth prompt in the browser that opens, then send yourself a test email and check it shows up in the CLI output / dashboard.
 
+## 4. Decide: rewrite git history to purge old Slack tokens from info.md?
+
+`info.md` had two real Slack tokens (a `SLACK_APP_TOKEN` and a Bot User OAuth Token) pasted into it in plaintext during early setup. Both were confirmed dead via Slack's `auth.test` (`"ok": false, "invalid_auth"` for each) and have now been redacted from the file's current content. They still exist in the file's git history though — introduced in `d05a43e` ("Created info.md, added game plan") and still present through `f222ab7` ("editied info.md"), i.e. every commit from the second one onward.
+
+Two options, and this needs your explicit choice — not something to default on:
+
+1. **Leave history as-is.** Reasonable since both tokens are already dead and the repo is private (confirmed via `gh repo view` — not publicly exposed).
+2. **Rewrite history** with `git filter-repo` (or BFG Repo-Cleaner) to purge the token strings from every commit, then force-push to `origin/main`. This is disruptive: it rewrites every commit SHA from `d05a43e` onward and requires a force-push. Since this is a solo project there's likely no other clone to worry about invalidating, but it's still a one-way door worth deciding deliberately rather than doing by default.
+
+Let me know which you'd prefer, or if you'd rather just leave it (given the tokens are confirmed dead already, there's no urgency either way).
+
 ---
 
 *(This file is scratch/working-notes, not part of the permanent docs — safe to delete once everything below is done.)*

@@ -82,8 +82,4 @@ Beyond week 4 (if you want to go long-term): native notifications, calendar-awar
 
 Want me to scaffold the actual repo structure (FastAPI backend + React/TS frontend boilerplate) so you can start coding Week 1 today?
 
-SLACK_APP_TOKEN:
-xapp-1-A0BM2RSPR99-11725059933089-d0d80c1fa2b91be0a4f771d96f70de4c26916bd6e93b92f28c9ea6976d7aa925
-
-
-Bot User OAuth Token:xoxb-11751409292768-11707808923639-j4RaibckqLpzFOHb15muRSzR
+(Two Slack tokens that were pasted here during early setup have been removed — confirmed dead via Slack's auth.test before removal. They still exist in this file's older commit history; see TODO.md for the history-rewrite decision.)
