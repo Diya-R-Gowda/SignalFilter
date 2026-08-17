@@ -29,6 +29,9 @@ def init_db():
         conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS embedding_vector TEXT"))
         conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS cluster_count INTEGER"))
         conn.execute(text("ALTER TABLE focus_states ADD COLUMN IF NOT EXISTS source TEXT"))
+        conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS drafted_reply TEXT"))
+        conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS reply_posted_at TIMESTAMPTZ"))
+        conn.execute(text("ALTER TABLE items ADD COLUMN IF NOT EXISTS channel TEXT"))
         conn.commit()
 
         # Dedup before adding the unique constraint below, or the ALTER fails outright

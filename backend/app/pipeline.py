@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models.item import Item
-from app.services import embedding, llm, notify
+from app.services import embedding, llm, notify, repo_index
 from app.services.focus import get_current_focus
 from app.services.sync_state import get_cursor
 
@@ -37,6 +37,26 @@ def _is_calendar_busy(session: Session) -> bool:
     return datetime.now(timezone.utc) < busy_until
 
 
+def _maybe_draft_reply(item: Item) -> None:
+    """GitHub-aware auto-reply (Tier A) — only attempted for Slack items about to notify,
+    since the drafting LLM call only has value on a message that would otherwise interrupt
+    anyway. Leaves item.drafted_reply as None (the default) on no match or low confidence;
+    never raises into the caller so a repo_index/LLM hiccup can't break real notification."""
+    if item.source != "slack" or not item.channel:
+        return
+    try:
+        match = repo_index.find_matching_commit(item.content)
+        if match is None:
+            return
+        reply, _reason = llm.draft_reply_from_commit(
+            item.content, match["sha"], match["subject"], match["body"]
+        )
+        if reply:
+            item.drafted_reply = reply
+    except Exception as exc:
+        print(f"[pipeline] reply drafting failed for item {item.id}: {exc}")
+
+
 def process_item(
     session: Session,
     source: str,
@@ -44,6 +64,7 @@ def process_item(
     content: str,
     source_timestamp: str,
     thread_id: str | None = None,
+    channel: str | None = None,
 ) -> Item:
     focus_text = get_current_focus(session) or ""
 
@@ -56,6 +77,7 @@ def process_item(
         sender=sender,
         content=content,
         thread_id=thread_id,
+        channel=channel,
         source_timestamp=source_timestamp,
         focus_text=focus_text,
         embedding_score=embedding_score,
@@ -101,6 +123,7 @@ def process_item(
             # history — worth revisiting once more real cases exist, not a settled rule.
             if score >= 9 or _todays_notified_count(session) < settings.attention_budget_daily:
                 item.notified = True
+                _maybe_draft_reply(item)
             else:
                 item.queued_at = datetime.now(timezone.utc)
 
@@ -114,7 +137,14 @@ def process_item(
     if item.notified:
         threading.Thread(
             target=notify.send_notification,
-            kwargs={"title": f"{source} — {sender}", "body": content[:200]},
+            kwargs={
+                "title": f"{source} — {sender}",
+                "body": content[:200],
+                "item_id": item.id,
+                "drafted_reply": item.drafted_reply,
+                "channel": item.channel,
+                "thread_ts": item.source_timestamp,
+            },
             daemon=True,
         ).start()
 

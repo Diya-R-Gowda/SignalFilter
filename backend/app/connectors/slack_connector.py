@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+from slack_sdk import WebClient
 
 from app.config import settings
 from app.db import SessionLocal
@@ -25,11 +26,23 @@ def handle_message(event, say):
             content=event.get("text", ""),
             source_timestamp=event.get("ts", ""),
             thread_id=event.get("thread_ts") or event.get("channel"),
+            channel=event.get("channel"),
         )
         status = "NOTIFIED" if item.notified else ("scored" if item.passed_stage1 else "filtered")
         print(f"[slack] {event.get('user')}: {event.get('text', '')[:60]!r} -> {status}")
     finally:
         session.close()
+
+
+def post_reply(channel: str, thread_ts: str | None, text: str) -> None:
+    """Posts a GitHub-aware auto-reply on the user's behalf. Requires the bot token to carry
+    the chat:write scope — not part of this project's original Slack app setup, so this will
+    raise SlackApiError(missing_scope) until that scope is added and the bot reinstalled
+    (see TODO.md). Raises rather than swallowing the error so the caller (the toast on_click
+    handler) can decide whether to still mark reply_posted_at — it deliberately does not, so a
+    failed post can be retried rather than silently recorded as sent."""
+    client = WebClient(token=settings.slack_bot_token)
+    client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=text)
 
 
 def _heartbeat_loop() -> None:

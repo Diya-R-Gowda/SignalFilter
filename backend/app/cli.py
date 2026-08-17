@@ -44,6 +44,7 @@ def cmd_run(args: argparse.Namespace) -> None:
     from app.connectors.calendar_connector import start_calendar_listener
     from app.digest import start_digest_scheduler
     from app.services.flow_state import start_flow_state_logger
+    from app.services.repo_index import start_repo_index_refresher
 
     # Not per-connector-source — calendar informs every incoming message regardless of
     # which of Slack/Gmail is running, same "starts exactly once" requirement digest
@@ -55,6 +56,9 @@ def cmd_run(args: argparse.Namespace) -> None:
     # before any suppression logic is written. Does not affect notify decisions yet.
     threading.Thread(target=start_flow_state_logger, daemon=True).start()
     print("Flow-state data gathering started (validation phase only — not yet affecting notifications).")
+    # GitHub-aware auto-reply (Tier A) — keeps the in-memory commit index fresh so incoming
+    # Slack questions can be matched against recent commits without a live git call per message.
+    threading.Thread(target=start_repo_index_refresher, daemon=True).start()
 
     if len(listeners) == 1:
         name, start_fn = listeners[0]
@@ -123,6 +127,9 @@ def main() -> None:
     # default console/file encoding (cp1252) can't print those, crashing mid-poll and — for
     # Gmail — preventing the history cursor from ever advancing past the failing message.
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+    from app.services.app_identity import ensure_app_identity
+    ensure_app_identity()
 
     init_db()
 

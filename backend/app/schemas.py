@@ -24,6 +24,8 @@ class ItemOut(BaseModel):
     queued_at: datetime | None
     cluster_count: int | None
     feedback: bool | None
+    drafted_reply: str | None
+    reply_posted_at: datetime | None
 
 
 class FocusOut(BaseModel):

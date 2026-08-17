@@ -20,6 +20,7 @@ from app.schemas import (
     SettingsIn,
     SettingsOut,
 )
+from app.services.feedback import upsert_feedback
 from app.services.focus import get_current_focus_state, set_focus
 from app.services.sync_state import get_cursor, set_cursor
 
@@ -114,18 +115,7 @@ def create_feedback(item_id: str, body: FeedbackIn, session: Session = Depends(g
     if item is None:
         raise HTTPException(status_code=404, detail="Item not found")
 
-    # Upsert, not insert — feedback_item_id_unique makes one vote per item the only valid
-    # state; voting again replaces the previous vote rather than adding a second row.
-    feedback = session.query(Feedback).filter(Feedback.item_id == item_id).first()
-    if feedback:
-        feedback.thumbs_up = body.thumbs_up
-        feedback.created_at = datetime.now(timezone.utc)
-    else:
-        feedback = Feedback(item_id=item_id, thumbs_up=body.thumbs_up)
-        session.add(feedback)
-    session.commit()
-    session.refresh(feedback)
-    return feedback
+    return upsert_feedback(session, item_id, body.thumbs_up)
 
 
 def _read_tuning_settings(session: Session) -> SettingsOut:

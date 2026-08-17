@@ -52,6 +52,21 @@ Two options, and this needs your explicit choice — not something to default on
 
 Let me know which you'd prefer, or if you'd rather just leave it (given the tokens are confirmed dead already, there's no urgency either way).
 
+## 5. Add the `chat:write` scope to the Slack app (needed for GitHub-aware auto-reply's Tier A to actually post)
+
+Tier A is fully built and end-to-end tested (drafting, matching, actionable toast, feedback capture) — the one piece that needs you specifically is that the Slack bot is currently read-only. To let it post a confirmed reply:
+
+1. Go to https://api.slack.com/apps and open the Signal Filter app.
+2. **OAuth & Permissions** → under **Bot Token Scopes**, add `chat:write`.
+3. Slack will prompt you to reinstall the app to the workspace — do that.
+4. The Bot User OAuth Token may change on reinstall; if so, update `SLACK_BOT_TOKEN` in `backend/.env`.
+
+Until this is done, clicking "Yes, post it" on a drafted-reply toast will fail with a clear `missing_scope` error in the console and `reply_posted_at` will stay unset — it won't silently pretend to have posted.
+
+## 6. Restart the running `cli.py run` process to pick up Part 1 + Part 2 Tier A
+
+Both features are live in the code but the currently-running background process was started before these changes and won't pick them up (new schema columns, new background threads, new pipeline behavior) until it's restarted. No rush — just flagging that a restart is needed before either feature actually takes effect in your real daily usage, rather than assuming it already has.
+
 ---
 
 *(This file is scratch/working-notes, not part of the permanent docs — safe to delete once everything below is done.)*
