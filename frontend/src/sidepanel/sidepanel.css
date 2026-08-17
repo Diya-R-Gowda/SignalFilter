@@ -1,0 +1,39 @@
+.sidepanel {
+  max-width: none;
+  padding: 12px;
+}
+
+.sidepanel header h1 {
+  font-size: 18px;
+  margin-bottom: 6px;
+}
+
+.sidepanel .current-focus {
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.sidepanel .focus-form {
+  margin-bottom: 8px;
+}
+
+.sidepanel h2 {
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.sidepanel main section {
+  margin-bottom: 20px;
+}
+
+.dashboard-link {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  margin-bottom: 12px;
+}
+
+.dashboard-link:hover {
+  text-decoration: underline;
+}

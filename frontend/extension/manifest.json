@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "Signal Filter",
+  "version": "0.1.0",
+  "description": "Local notification triage in a side panel — surfaced items, focus switcher, and feedback voting against your local Signal Filter backend.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Signal Filter"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["sidePanel"],
+  "host_permissions": ["http://localhost:8000/*"]
+}

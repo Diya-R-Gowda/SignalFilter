@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import { getFocus, getHealth, getItems, setFocus } from "./api";
+import { isDigestWorthy, isLowRelevance, isQueued } from "./classification";
 import ConnectorStatus from "./ConnectorStatus";
 import ItemCard from "./ItemCard";
 import SettingsPanel from "./SettingsPanel";
@@ -58,17 +59,6 @@ function App() {
     setFocusState(updated);
     setFocusInput("");
   }
-
-  const isLowRelevance = (item: Item) =>
-    !item.passed_stage1 || (item.llm_score !== null && item.llm_score <= 1);
-  const isDigestWorthy = (item: Item) =>
-    item.passed_stage1 &&
-    item.llm_score !== null &&
-    item.llm_score > 1 &&
-    !item.notified &&
-    item.digested_at === null &&
-    item.queued_at === null;
-  const isQueued = (item: Item) => item.queued_at !== null;
 
   const surfaced = items.filter((item) => item.notified);
   const filtered = items.filter((item) => !item.notified && !isQueued(item));
