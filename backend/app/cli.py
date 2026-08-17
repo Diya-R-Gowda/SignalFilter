@@ -43,12 +43,18 @@ def cmd_run(args: argparse.Namespace) -> None:
 
     from app.connectors.calendar_connector import start_calendar_listener
     from app.digest import start_digest_scheduler
+    from app.services.flow_state import start_flow_state_logger
 
     # Not per-connector-source — calendar informs every incoming message regardless of
     # which of Slack/Gmail is running, same "starts exactly once" requirement digest
     # mode established, so it's not gated behind --source the way Slack/Gmail are.
     threading.Thread(target=start_digest_scheduler, daemon=True).start()
     threading.Thread(target=start_calendar_listener, daemon=True).start()
+    # Validation-phase only (see flow_state.py) — logs real (idle, process) samples during
+    # normal daily use so flow-state calibration constants can be checked against real data
+    # before any suppression logic is written. Does not affect notify decisions yet.
+    threading.Thread(target=start_flow_state_logger, daemon=True).start()
+    print("Flow-state data gathering started (validation phase only — not yet affecting notifications).")
 
     if len(listeners) == 1:
         name, start_fn = listeners[0]
