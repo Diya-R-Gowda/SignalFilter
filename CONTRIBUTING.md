@@ -33,6 +33,7 @@
 | Self-auditing the AI judge (golden-set regression) | 🟢 Done | `python -m app.cli audit` — 8 hand-recorded cases (5 LLM, 3 embedding), live-verified to catch a real deliberately-introduced regression — see detailed writeup below |
 | Per-sender adaptive trust | ⚪ Deferred, concrete re-trigger condition set | Real per-sender data checked live — the two loudest noisy senders are already fully handled by the LLM's existing bulk-mail rule, and the one sender with real variance is a case where adjustment is risky, not wanted. No sender in the DB currently meets the bar to justify building this — see detailed writeup below |
 | GitHub-aware auto-reply with actionable notifications | 🟡 Tier A built and live-verified; Tier B (delayed-click support) explicitly deferred | Commit-matching, reply drafting, and actionable-toast delivery all live-tested against real repo history; posting itself gated on the `chat:write` Slack scope (TODO.md #5) — see detailed writeup below |
+| Browser extension (Tier A: side-panel dashboard) | 🟡 Built, automated checks pass; not yet loaded in Chrome | `frontend/extension/` + `frontend/src/sidepanel/` — Manifest V3 side panel, no backend changes, shares `api.ts`/`types.ts`/`ItemCard.tsx` with the dashboard; build verified (relative asset paths, required `action` manifest key), interactive Chrome load-unpacked test still outstanding — see detailed writeup below |
 
 ## Technical Summary
 
@@ -179,6 +180,24 @@ Per the plan's mandatory pre-ship validation gate (the same one weak-signal esca
 **Delivery:** `notify.py` sends a plain toast as before, or — when `drafted_reply`, `item_id`, and `channel` are all present — an actionable one with `Yes, post it` / `No` buttons (`activationType: "foreground"`, custom `arguments`, the format confirmed working above). The click handler is idempotent (`reply_posted_at is not None` short-circuits a double-click), always records the click as feedback via the same `Feedback` upsert the dashboard's 👍/👎 buttons use (`app/services/feedback.py`, extracted from what was previously inline logic in `main.py`'s `create_feedback` endpoint so both call sites share it), and only actually posts to Slack on Yes — a failed post (e.g. missing scope) leaves `reply_posted_at` null rather than silently pretending to have succeeded.
 
 **End-to-end live verification:** drafting, matching, DB persistence, click handling, feedback capture, and idempotency were all tested together against a real synthetic item built from this repo's actual commit history (the real POST /focus 500-error fix), inserted and cleaned up without touching the live running process's actual focus state or real Slack API — deliberately avoided live-firing a real Slack post since the `chat:write` scope isn't added yet (TODO.md #5). Actionable toast delivery itself was separately live-verified with real clicks captured under the permanent AUMID.
+
+### Browser extension — Tier A (side-panel dashboard) built, Tier B (inline injection) out of scope
+
+**Scope:** covers only Tier 1 of the "Alternate form: Browser extension" idea below — a Chrome/Edge Manifest V3 side panel that's a pure frontend client against the existing local API. Tier 2 (inline injection into Gmail/Slack's own web UI via a content script) wasn't started; nothing here precludes building it later.
+
+**No backend changes — the original idea writeup was wrong about needing them.** The idea's own "Open questions" claimed an extension's `chrome-extension://` origin "would need to be added to the allowed origins too" (i.e. touching `backend/app/main.py`'s CORS middleware). Verified against Chrome's actual extension permission model before building: extension-page contexts (side panel, popup, options, background service worker — everything except content scripts) with `host_permissions` declared bypass CORS/Same-Origin Policy entirely for fetches to that origin. Since Tier A has no content script, the side panel's `fetch("http://localhost:8000/...")` calls work with zero backend changes — confirmed by the build actually working end-to-end against the real API with `backend/app/main.py` untouched.
+
+**Reuse over rebuild:** lives inside the existing `frontend/` package rather than a new one — a second Vite HTML entry (`sidepanel.html`) plus `frontend/src/sidepanel/`, importing `api.ts`, `types.ts`, and `ItemCard.tsx` from the dashboard via plain relative paths. `App.tsx`'s inline `isLowRelevance`/`isDigestWorthy`/`isQueued`/split-by-bucket logic (previously duplicated-by-hand risk) was extracted into `frontend/src/classification.ts` so the dashboard and the side panel can never drift on what counts as "surfaced" vs "filtered." A separate `vite.extension.config.ts` builds just the side panel into `dist-extension/` (gitignored); `npm run build`/`dev` for the dashboard are untouched.
+
+**Two real Manifest V3 gaps caught before building, not discovered at load-time:**
+1. Vite's default `base: "/"` emits absolute asset paths (`/assets/index-abc123.js`) that resolve to nothing inside `chrome-extension://<id>/` — needs `base: "./"` explicitly. Confirmed in the actual built `dist-extension/sidepanel.html`, not just the config: both the script and stylesheet tags use `./assets/...`.
+2. `chrome.sidePanel.setPanelBehavior({openPanelOnActionClick: true})` needs a toolbar icon to bind to, which requires a top-level `"action"` key in `manifest.json` — confirmed against Chrome's current side-panel API docs (fetched directly rather than assumed from memory) before adding it, since without it there's no icon to click and the panel can never open via the toolbar.
+
+**Icons:** rasterized from the existing purple `favicon.svg` via a temporary `sharp` install (`npm install --no-save sharp`, removed immediately after generating the three PNGs — confirmed zero trace left in `package.json`/`package-lock.json`).
+
+**Scope, deliberately lean:** Surfaced + Filtered items, the focus switcher, and thumbs-up/down feedback voting only. The dashboard has grown since the original idea sketch to include Queued, Digest, connector health, and a daily-budget indicator — all left out of v1 to keep the panel narrow and focused; `classification.ts` makes adding any of them later a small, low-risk change if wanted. Settings and Feedback Insights stay dashboard-only; the panel links out to `http://localhost:5173` instead of reimplementing them.
+
+**Verified:** `npm run build:extension` produces a clean `dist-extension/` (hashed JS/CSS, `manifest.json`, `background.js`, three icon sizes); relative asset paths confirmed in the built HTML; the dashboard's own `npm run build` and `npm run lint` still pass after the `classification.ts` extraction. **Not yet verified:** actually loading `dist-extension/` as an unpacked extension in Chrome — confirming a toolbar icon appears, the panel opens and renders real data, focus/feedback round-trip through the same backend the dashboard uses, and the panel stays open across tab navigation (the core Side Panel behavior a popup doesn't have). That needs a human at an actual browser.
 
 ## The idea
 
@@ -410,6 +429,8 @@ Every incoming message runs through two stages before a notification decision is
 
 ## Alternate form: Browser extension
 
+**Status: Tier 1 (side-panel dashboard) built — see the Technical Summary entry above.** Tier 2 (inline injection, below) is not started. One correction from building Tier 1: the CORS claim in this section's own "Open questions" was wrong — no backend/CORS change was actually needed; see the Technical Summary entry for why.
+
 **The idea:** instead of (or alongside) the React dashboard, ship Signal Filter's frontend as a browser extension. This isn't a rewrite — the Python backend (Slack/Gmail connectors, Ollama, Postgres, the FastAPI API) keeps running locally exactly as it does today; an extension is just a different client hitting the same `localhost:8000` API the dashboard already talks to. Two distinct versions worth building, in order of ambition:
 
 1. **Popup/side-panel dashboard** — the simplest version: the extension's popup (or a persistent side panel, which Chrome/Edge support via the Side Panel API) fetches `/items` and `/focus` the same way `App.tsx` does now, showing Surfaced/Filtered right from the browser toolbar instead of a separate tab. Close to a direct port of the existing dashboard into an extension shell.
@@ -423,11 +444,14 @@ Every incoming message runs through two stages before a notification decision is
 - Reuse `frontend/src/api.ts`'s fetch wrappers largely as-is — the API surface doesn't need to change for the popup version.
 - For inline injection: a content script matching `mail.google.com` / `app.slack.com`, using `MutationObserver` to catch Gmail's/Slack's dynamically-rendered message lists (both are heavy SPAs, so this can't rely on a static DOM), matching each visible message to its `Item` row and rendering a small badge (color-coded by score, tooltip with the LLM's reason) without altering the site's own functionality.
 
-**Open questions to resolve before building this:**
+**Open questions, resolved for Tier 1 (see Technical Summary above):**
 
-- Gmail and Slack's web UIs are both unstable/obfuscated DOM targets that change over time — a content script matching their internals is inherently more fragile than the connectors talking to their official APIs, and would need ongoing maintenance as their frontends change.
-- Does the popup version replace the standalone dashboard, or do both coexist (dashboard for a fuller view, extension for at-a-glance/inline)?
-- CORS is already handled for `localhost` broadly (see the dashboard's CORS fix) — an extension's origin (`chrome-extension://...`) would need to be added to the allowed origins too.
+- ~~CORS: does an extension's origin need to be added to the backend's allowed origins?~~ — resolved, and the original assumption here was wrong: no backend change needed at all. Extension-page contexts with `host_permissions` bypass CORS entirely; confirmed by the real build working against the unmodified backend.
+- ~~Does the popup version replace the standalone dashboard, or do both coexist?~~ — resolved: both coexist. The side panel deliberately excludes Settings/Feedback Insights and links out to the dashboard for those.
+
+**Still open, relevant mainly to Tier 2 (inline injection, not yet started):**
+
+- Gmail and Slack's web UIs are both unstable/obfuscated DOM targets that change over time — a content script matching their internals is inherently more fragile than the connectors talking to their official APIs, and would need ongoing maintenance as their frontends change. Also, a content script does NOT get the `host_permissions` CORS exemption Tier 1 relies on (only extension pages/background do) — Tier 2 would need the content script to relay through the background service worker rather than fetch `localhost:8000` directly.
 - Packaging/distribution: purely a local unlisted extension (load unpacked, or a private Chrome Web Store listing), since this is a personal tool reading personal data — not intended for public distribution as-is.
 
 ## Cost notes
@@ -438,5 +462,5 @@ Everything above runs at $0: Postgres/FastAPI/React/CLI are local and open-sourc
 
 - How the similarity threshold gets tuned over time (manual vs. learned from feedback)
 - Whether `qwen2.5:3b-instruct` CPU inference speed holds up in practice once tested against real message volume — fallback would be a smaller/faster model or a tighter prompt
-- Browser extension as an alternate frontend — see detailed idea above ("Alternate form: Browser extension")
+- Browser extension as an alternate frontend — Tier 1 (side panel) built, see "Alternate form: Browser extension" above; Tier 2 (inline injection) not started
 - Long-term: calendar-aware auto-focus detection, multi-user/team version
